@@ -39,39 +39,20 @@ void main() {
 
   float ao = 1.0 - clamp(occlusion * u_intensity, 0.0, 1.0);
 
-  // Gamma correction for contrast
-  ao = pow(ao, 1.2);
+  // 구조적 깊이 AO: 낮은 영역(틈새, 하부 원사)을 어둡게
+  float depthFactor = smoothstep(0.0, 0.5, centerH);
+  ao *= mix(0.35, 1.0, depthFactor);
 
-  // 3x3 Gaussian blur in same pass for smoother result
-  float blurSum = 0.0;
-  float blurW = 0.0;
+  // 방향성 캐비티: 십자 샘플링으로 교차점 경계 강조
+  float hL = sampleH(v_uv + vec2(-1.0, 0.0) * u_texelSize);
+  float hR = sampleH(v_uv + vec2( 1.0, 0.0) * u_texelSize);
+  float hU = sampleH(v_uv + vec2( 0.0, 1.0) * u_texelSize);
+  float hD = sampleH(v_uv + vec2( 0.0,-1.0) * u_texelSize);
+  float cavity = max((hL + hR + hU + hD) * 0.25 - centerH, 0.0);
+  ao *= 1.0 - clamp(cavity * u_intensity * 3.0, 0.0, 0.5);
 
-  for (int dy = -1; dy <= 1; dy++) {
-    for (int dx = -1; dx <= 1; dx++) {
-      vec2 off = vec2(float(dx), float(dy)) * u_texelSize;
-      vec2 coord = mod(v_uv + off, 1.0);
-      float sH = sampleH(coord);
-
-      // Recompute AO for this neighbor
-      float nOcc = 0.0;
-      for (int i = 0; i < 16; i++) {
-        vec2 pOff = poissonDisc[i] * u_radius * u_texelSize;
-        float pH = sampleH(coord + pOff);
-        nOcc += max(pH - sH, 0.0);
-      }
-      nOcc /= 16.0;
-      float nAo = 1.0 - clamp(nOcc * u_intensity, 0.0, 1.0);
-      nAo = pow(nAo, 1.2);
-
-      // Gaussian weight: center=4, edge=2, corner=1
-      float w = (dx == 0 && dy == 0) ? 4.0 :
-                (dx == 0 || dy == 0) ? 2.0 : 1.0;
-      blurSum += nAo * w;
-      blurW += w;
-    }
-  }
-
-  ao = blurSum / blurW;
+  ao = pow(ao, 1.4);
+  ao = clamp(ao, 0.0, 1.0);
 
   fragColor = vec4(vec3(ao), 1.0);
 }

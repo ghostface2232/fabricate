@@ -58,7 +58,7 @@ void main() {
     smoothstep(halfR, 0.0, abs(dist.y)),
     smoothstep(halfR, 0.0, abs(dist.x))
   );
-  vec2 r = halfR * (1.0 - 0.02 * prox);
+  vec2 r = halfR * (1.0 - 0.03 * prox);
 
   // 원사 프로파일
   float warpP = yarnProfile(dist.x, r.x);
@@ -78,5 +78,22 @@ void main() {
   float hw = mix(botBase * weftP + weftS, topBase * warpP * flatten + warpS, smoothstep(0.0, 0.45, warpP));
   float hf = mix(botBase * warpP + warpS, topBase * weftP * flatten + weftS, smoothstep(0.0, 0.45, weftP));
 
-  fragColor = vec4(vec3(mix(hf, hw, overFactor)), 1.0);
+  float h = mix(hf, hw, overFactor);
+
+  // ── 경계 크레바스: 상태 전환 경계에서 골 생성 ──
+  float valleyWidth = 0.20;
+  float valleyX = smoothstep(valleyWidth, 0.0, dBnd.x) * abs(hardOver - nOverX);
+  float valleyY = smoothstep(valleyWidth, 0.0, dBnd.y) * abs(hardOver - nOverY);
+  h -= max(valleyX, valleyY) * 0.15;
+
+  // ── 교차점 가장자리 크레바스: 원사 프로파일 전이대에서 골 생성 ──
+  float warpEdge = 4.0 * warpP * (1.0 - warpP);
+  float weftEdge = 4.0 * weftP * (1.0 - weftP);
+  h -= warpEdge * weftEdge * 0.10;
+
+  // ── 틈새 함몰: 원사 커버리지 낮은 영역 ──
+  float coverage = max(warpP, weftP);
+  h *= smoothstep(0.0, 0.15, coverage);
+
+  fragColor = vec4(vec3(clamp(h, 0.0, 1.0)), 1.0);
 }

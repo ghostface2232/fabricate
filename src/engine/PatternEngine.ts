@@ -164,11 +164,23 @@ export class PatternEngine {
 
     this.roughnessShader.use();
     this.roughnessShader.setUniform('u_heightMap', heightTex);
+    this.roughnessShader.setUniform('u_weaveMatrix', this.matrixTexture);
     this.roughnessShader.setUniform('u_texelSize', texelSize);
+    this.roughnessShader.setUniform('u_matrixSize', [weaveResult.width, weaveResult.height]);
+    this.roughnessShader.setUniform('u_density', density);
+    this.roughnessShader.setUniform('u_yarnThickness', yarnThickness);
     this.roughnessShader.setUniform('u_roughnessBase', pbrSettings.roughnessBase);
     this.roughnessShader.setUniform('u_roughnessVariation', pbrSettings.roughnessVariation);
     this.roughnessShader.setUniform('u_cavityInfluence', pbrSettings.roughnessCavityInfluence);
     this.roughnessShader.setUniformInt('u_patternType', typeInt);
+
+    if (params.type === 'plainWeave' || params.type === 'twillWeave' || params.type === 'satinWeave') {
+      this.roughnessShader.setUniform('u_twistAngle', params.twistAngle * (Math.PI / 180));
+      this.roughnessShader.setUniform('u_twistIntensity', params.twistIntensity);
+    } else {
+      this.roughnessShader.setUniform('u_twistAngle', 0);
+      this.roughnessShader.setUniform('u_twistIntensity', 0);
+    }
 
     quad.draw();
     this.roughnessShader.unuse();
@@ -186,6 +198,14 @@ export class PatternEngine {
     this.diffuseShader.setUniform('u_heightMap', heightTex);
     this.diffuseShader.setUniform('u_yarnThickness', yarnThickness);
     this.diffuseShader.setUniformInt('u_patternType', typeInt);
+
+    if (params.type === 'plainWeave' || params.type === 'twillWeave' || params.type === 'satinWeave') {
+      this.diffuseShader.setUniform('u_twistAngle', params.twistAngle * (Math.PI / 180));
+      this.diffuseShader.setUniform('u_twistIntensity', params.twistIntensity);
+    } else {
+      this.diffuseShader.setUniform('u_twistAngle', 0);
+      this.diffuseShader.setUniform('u_twistIntensity', 0);
+    }
 
     // 컬러 설정: fabric → warpColor/weftColor, carbon → fiberColor/resinColor
     if (params.type === 'plainWeave' || params.type === 'twillWeave' || params.type === 'satinWeave') {
