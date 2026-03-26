@@ -1,6 +1,7 @@
 /**
- * 최소 PBR 렌더링 파이프라인.
- * 현재는 Height Map만 렌더링. React 의존성 없음.
+ * Full PBR 렌더링 파이프라인.
+ * Height → Normal → AO → Roughness → Diffuse 5-pass 체인.
+ * React 의존성 없음.
  */
 
 import { WebGLContext } from './WebGLContext';
@@ -8,37 +9,76 @@ import { ShaderProgram } from './ShaderProgram';
 import { RenderTarget } from './RenderTarget';
 import { FullscreenQuad } from './FullscreenQuad';
 import { generateWeaveMatrix } from './WeaveMatrix';
-import type { PatternParams, PBRSettings } from '@/types/pattern';
+import type { PatternParams, PBRSettings, PBRMapType } from '@/types/pattern';
 
 import fullscreenQuadVert from '@/shaders/fullscreen-quad.vert?raw';
 import heightFrag from '@/shaders/height.frag?raw';
+import normalFrag from '@/shaders/normal.frag?raw';
+import aoFrag from '@/shaders/ao.frag?raw';
+import roughnessFrag from '@/shaders/roughness.frag?raw';
+import diffuseFrag from '@/shaders/diffuse.frag?raw';
 
 const RENDER_SIZE = 512;
 
+/** 패턴 타입 → 정수 인코딩 (셰이더 u_patternType) */
+function patternTypeToInt(type: PatternParams['type']): number {
+  switch (type) {
+    case 'plainWeave':  return 0;
+    case 'twillWeave':  return 1;
+    case 'satinWeave':  return 2;
+    case 'carbonPlain': return 3;
+    case 'carbonTwill': return 4;
+  }
+}
+
 export class PatternEngine {
   private readonly ctx: WebGLContext;
-  private readonly heightShader: ShaderProgram;
   private readonly quad: FullscreenQuad;
+
+  // 셰이더 (맵별)
+  private readonly heightShader: ShaderProgram;
+  private readonly normalShader: ShaderProgram;
+  private readonly aoShader: ShaderProgram;
+  private readonly roughnessShader: ShaderProgram;
+  private readonly diffuseShader: ShaderProgram;
+
+  // 렌더 타겟 (맵별 — 각각 독립 FBO)
   private readonly heightTarget: RenderTarget;
+  private readonly normalTarget: RenderTarget;
+  private readonly aoTarget: RenderTarget;
+  private readonly roughnessTarget: RenderTarget;
+  private readonly diffuseTarget: RenderTarget;
+
   private matrixTexture: WebGLTexture | null = null;
+  private currentSize = RENDER_SIZE;
 
   constructor() {
     this.ctx = new WebGLContext(RENDER_SIZE, RENDER_SIZE);
-    this.heightShader = new ShaderProgram(this.ctx, fullscreenQuadVert, heightFrag);
     this.quad = new FullscreenQuad(this.ctx);
+
+    // 셰이더 프로그램 생성
+    this.heightShader = new ShaderProgram(this.ctx, fullscreenQuadVert, heightFrag);
+    this.normalShader = new ShaderProgram(this.ctx, fullscreenQuadVert, normalFrag);
+    this.aoShader = new ShaderProgram(this.ctx, fullscreenQuadVert, aoFrag);
+    this.roughnessShader = new ShaderProgram(this.ctx, fullscreenQuadVert, roughnessFrag);
+    this.diffuseShader = new ShaderProgram(this.ctx, fullscreenQuadVert, diffuseFrag);
+
+    // 렌더 타겟 생성
     this.heightTarget = new RenderTarget(this.ctx, RENDER_SIZE, RENDER_SIZE);
+    this.normalTarget = new RenderTarget(this.ctx, RENDER_SIZE, RENDER_SIZE);
+    this.aoTarget = new RenderTarget(this.ctx, RENDER_SIZE, RENDER_SIZE);
+    this.roughnessTarget = new RenderTarget(this.ctx, RENDER_SIZE, RENDER_SIZE);
+    this.diffuseTarget = new RenderTarget(this.ctx, RENDER_SIZE, RENDER_SIZE);
   }
 
-  /** 패턴 파라미터로 Height Map을 렌더링한다. */
-  generate(params: PatternParams, _pbrSettings: PBRSettings): void {
-    const { ctx, heightShader, quad, heightTarget } = this;
+  /** 전체 PBR 맵 렌더링 파이프라인 */
+  generate(params: PatternParams, pbrSettings: PBRSettings): void {
+    const { ctx, quad } = this;
     const gl = ctx.gl;
 
-    // (a) 직조 매트릭스 생성
+    // ── 매트릭스 생성 및 업로드 ──
     const weaveResult = generateWeaveMatrix(params);
 
-    // (b) 매트릭스를 R8 데이터 텍스처로 업로드
-    // 매트릭스 값은 0 또는 1이므로 255로 스케일
     const scaledMatrix = new Uint8Array(weaveResult.matrix.length);
     for (let i = 0; i < weaveResult.matrix.length; i++) {
       scaledMatrix[i] = weaveResult.matrix[i] * 255;
@@ -54,39 +94,127 @@ export class PatternEngine {
       'R8',
     );
 
-    // (c) Height RenderTarget에 바인딩하고 렌더링
-    heightTarget.bind();
+    const density = params.density;
+    const yarnThickness = params.yarnThickness;
+    const flattening = params.flattening;
+    const typeInt = patternTypeToInt(params.type);
+    const texelSize: [number, number] = [1.0 / this.currentSize, 1.0 / this.currentSize];
+
+    // ── Pass 1: Height ──
+    this.heightTarget.bind();
     gl.clearColor(0, 0, 0, 1);
     gl.clear(gl.COLOR_BUFFER_BIT);
 
-    heightShader.use();
+    this.heightShader.use();
+    this.heightShader.setUniform('u_weaveMatrix', this.matrixTexture);
+    this.heightShader.setUniform('u_matrixSize', [weaveResult.width, weaveResult.height]);
+    this.heightShader.setUniform('u_density', density);
+    this.heightShader.setUniform('u_yarnThickness', yarnThickness);
+    this.heightShader.setUniform('u_flattening', flattening);
 
-    // (d) uniform 설정
-    heightShader.setUniform('u_weaveMatrix', this.matrixTexture);
-    heightShader.setUniform('u_matrixSize', [weaveResult.width, weaveResult.height]);
-
-    // 패턴 타입에 따라 density, yarnThickness 등의 소스가 다름
-    const density =  params.density;
-    const yarnThickness = params.yarnThickness;
-    const flattening = params.flattening;
-
-    heightShader.setUniform('u_density', density);
-    heightShader.setUniform('u_yarnThickness', yarnThickness);
-    heightShader.setUniform('u_flattening', flattening);
-
-    // twist: 직조 패브릭에만 해당, 카본은 0
     if (params.type === 'plainWeave' || params.type === 'twillWeave' || params.type === 'satinWeave') {
-      heightShader.setUniform('u_twistAngle', params.twistAngle * (Math.PI / 180));
-      heightShader.setUniform('u_twistIntensity', params.twistIntensity);
+      this.heightShader.setUniform('u_twistAngle', params.twistAngle * (Math.PI / 180));
+      this.heightShader.setUniform('u_twistIntensity', params.twistIntensity);
     } else {
-      heightShader.setUniform('u_twistAngle', 0);
-      heightShader.setUniform('u_twistIntensity', 0);
+      this.heightShader.setUniform('u_twistAngle', 0);
+      this.heightShader.setUniform('u_twistIntensity', 0);
     }
 
     quad.draw();
+    this.heightShader.unuse();
+    this.heightTarget.unbind();
 
-    heightShader.unuse();
-    heightTarget.unbind();
+    // Height 텍스처를 이후 패스에서 사용
+    const heightTex = this.heightTarget.getTexture();
+
+    // ── Pass 2: Normal ──
+    this.normalTarget.bind();
+    gl.clearColor(0.5, 0.5, 1.0, 1.0);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+
+    this.normalShader.use();
+    this.normalShader.setUniform('u_heightMap', heightTex);
+    this.normalShader.setUniform('u_texelSize', texelSize);
+    this.normalShader.setUniform('u_strength', pbrSettings.normalStrength);
+    this.normalShader.setUniformInt('u_filter', pbrSettings.normalFilter === 'scharr' ? 1 : 0);
+
+    quad.draw();
+    this.normalShader.unuse();
+    this.normalTarget.unbind();
+
+    // ── Pass 3: AO ──
+    this.aoTarget.bind();
+    gl.clearColor(1, 1, 1, 1);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+
+    this.aoShader.use();
+    this.aoShader.setUniform('u_heightMap', heightTex);
+    this.aoShader.setUniform('u_texelSize', texelSize);
+    this.aoShader.setUniform('u_radius', pbrSettings.aoRadius);
+    this.aoShader.setUniform('u_intensity', pbrSettings.aoIntensity);
+
+    quad.draw();
+    this.aoShader.unuse();
+    this.aoTarget.unbind();
+
+    // ── Pass 4: Roughness ──
+    this.roughnessTarget.bind();
+    gl.clearColor(0.5, 0.5, 0.5, 1);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+
+    this.roughnessShader.use();
+    this.roughnessShader.setUniform('u_heightMap', heightTex);
+    this.roughnessShader.setUniform('u_texelSize', texelSize);
+    this.roughnessShader.setUniform('u_roughnessBase', pbrSettings.roughnessBase);
+    this.roughnessShader.setUniform('u_roughnessVariation', pbrSettings.roughnessVariation);
+    this.roughnessShader.setUniform('u_cavityInfluence', pbrSettings.roughnessCavityInfluence);
+    this.roughnessShader.setUniformInt('u_patternType', typeInt);
+
+    quad.draw();
+    this.roughnessShader.unuse();
+    this.roughnessTarget.unbind();
+
+    // ── Pass 5: Diffuse ──
+    this.diffuseTarget.bind();
+    gl.clearColor(0, 0, 0, 1);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+
+    this.diffuseShader.use();
+    this.diffuseShader.setUniform('u_weaveMatrix', this.matrixTexture);
+    this.diffuseShader.setUniform('u_matrixSize', [weaveResult.width, weaveResult.height]);
+    this.diffuseShader.setUniform('u_density', density);
+    this.diffuseShader.setUniform('u_heightMap', heightTex);
+    this.diffuseShader.setUniform('u_yarnThickness', yarnThickness);
+    this.diffuseShader.setUniformInt('u_patternType', typeInt);
+
+    // 컬러 설정: fabric → warpColor/weftColor, carbon → fiberColor/resinColor
+    if (params.type === 'plainWeave' || params.type === 'twillWeave' || params.type === 'satinWeave') {
+      this.diffuseShader.setUniform('u_color1', [...params.warpColor]);
+      this.diffuseShader.setUniform('u_color2', [...params.weftColor]);
+    } else {
+      this.diffuseShader.setUniform('u_color1', [...params.fiberColor]);
+      this.diffuseShader.setUniform('u_color2', [...params.resinColor]);
+    }
+
+    quad.draw();
+    this.diffuseShader.unuse();
+    this.diffuseTarget.unbind();
+  }
+
+  /** 지정 맵의 렌더 타겟 반환 */
+  private getTarget(mapType: PBRMapType): RenderTarget {
+    switch (mapType) {
+      case 'height':    return this.heightTarget;
+      case 'normal':    return this.normalTarget;
+      case 'ao':        return this.aoTarget;
+      case 'roughness': return this.roughnessTarget;
+      case 'diffuse':   return this.diffuseTarget;
+    }
+  }
+
+  /** 지정 맵의 픽셀 데이터를 반환한다. */
+  getMapPixels(mapType: PBRMapType): Uint8Array {
+    return this.getTarget(mapType).readPixels();
   }
 
   /** Height RenderTarget의 픽셀 데이터를 반환한다. */
@@ -94,9 +222,44 @@ export class PatternEngine {
     return this.heightTarget.readPixels();
   }
 
-  /** Height RenderTarget 텍스처 (향후 다른 셰이더 입력용) */
+  /** Height RenderTarget 텍스처 (다른 셰이더 입력용) */
   getHeightTexture(): WebGLTexture {
     return this.heightTarget.getTexture();
+  }
+
+  /** 5개 맵의 픽셀 데이터를 모두 반환한다. */
+  getAllMapPixels(): Record<PBRMapType, Uint8Array> {
+    return {
+      height: this.heightTarget.readPixels(),
+      normal: this.normalTarget.readPixels(),
+      ao: this.aoTarget.readPixels(),
+      roughness: this.roughnessTarget.readPixels(),
+      diffuse: this.diffuseTarget.readPixels(),
+    };
+  }
+
+  /** Export용: 지정 해상도로 모든 맵을 재렌더링한 뒤 복원 */
+  renderAtResolution(resolution: number, params: PatternParams, pbrSettings: PBRSettings): void {
+    // 해상도 변경
+    this.ctx.resize(resolution, resolution);
+    this.heightTarget.resize(resolution, resolution);
+    this.normalTarget.resize(resolution, resolution);
+    this.aoTarget.resize(resolution, resolution);
+    this.roughnessTarget.resize(resolution, resolution);
+    this.diffuseTarget.resize(resolution, resolution);
+    this.currentSize = resolution;
+
+    // 전체 파이프라인 재렌더링
+    this.generate(params, pbrSettings);
+
+    // 기본 해상도 복원
+    this.ctx.resize(RENDER_SIZE, RENDER_SIZE);
+    this.heightTarget.resize(RENDER_SIZE, RENDER_SIZE);
+    this.normalTarget.resize(RENDER_SIZE, RENDER_SIZE);
+    this.aoTarget.resize(RENDER_SIZE, RENDER_SIZE);
+    this.roughnessTarget.resize(RENDER_SIZE, RENDER_SIZE);
+    this.diffuseTarget.resize(RENDER_SIZE, RENDER_SIZE);
+    this.currentSize = RENDER_SIZE;
   }
 
   /** 리소스 정리 */
@@ -105,9 +268,21 @@ export class PatternEngine {
     if (this.matrixTexture) {
       gl.deleteTexture(this.matrixTexture);
     }
+
     this.heightTarget.dispose();
+    this.normalTarget.dispose();
+    this.aoTarget.dispose();
+    this.roughnessTarget.dispose();
+    this.diffuseTarget.dispose();
+
     this.quad.dispose();
+
     this.heightShader.dispose();
+    this.normalShader.dispose();
+    this.aoShader.dispose();
+    this.roughnessShader.dispose();
+    this.diffuseShader.dispose();
+
     this.ctx.dispose();
   }
 }

@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { usePatternStore } from '@/stores/patternStore';
 import { PatternEngine } from '@/engine/PatternEngine';
+import type { PBRMapType } from '@/types/pattern';
 
 export function usePatternEngine() {
   const engineRef = useRef<PatternEngine | null>(null);
   const rafRef = useRef<number>(0);
   const [heightPixels, setHeightPixels] = useState<Uint8Array | null>(null);
+  const [allMapPixels, setAllMapPixels] = useState<Record<PBRMapType, Uint8Array> | null>(null);
   const [isReady, setIsReady] = useState(false);
 
   const params = usePatternStore((s) => s.params);
@@ -32,6 +34,7 @@ export function usePatternEngine() {
     if (!engine) return;
     engine.generate(params, pbrSettings);
     setHeightPixels(engine.getHeightPixels());
+    setAllMapPixels(engine.getAllMapPixels());
   }, [params, pbrSettings]);
 
   useEffect(() => {
@@ -43,5 +46,5 @@ export function usePatternEngine() {
     });
   }, [params, pbrSettings, isReady]);
 
-  return { engine: engineRef.current, heightPixels, isReady };
+  return { engine: engineRef.current, heightPixels, allMapPixels, isReady };
 }
