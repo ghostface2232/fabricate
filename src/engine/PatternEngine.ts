@@ -272,7 +272,7 @@ export class PatternEngine {
     // 전체 파이프라인 재렌더링
     this.generate(params, pbrSettings);
 
-    // 기본 해상도 복원
+    // 기본 해상도 복원 후 프리뷰용 재렌더링
     this.ctx.resize(RENDER_SIZE, RENDER_SIZE);
     this.heightTarget.resize(RENDER_SIZE, RENDER_SIZE);
     this.normalTarget.resize(RENDER_SIZE, RENDER_SIZE);
@@ -280,6 +280,8 @@ export class PatternEngine {
     this.roughnessTarget.resize(RENDER_SIZE, RENDER_SIZE);
     this.diffuseTarget.resize(RENDER_SIZE, RENDER_SIZE);
     this.currentSize = RENDER_SIZE;
+
+    this.generate(params, pbrSettings);
   }
 
   /** 리소스 정리 */
