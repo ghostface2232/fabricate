@@ -1,9 +1,9 @@
 function App() {
   return (
-    <div className="flex h-screen items-center justify-center bg-zinc-950">
-      <h1 className="text-4xl font-bold text-zinc-100">Fabricate</h1>
+    <div className="h-screen bg-zinc-950 text-zinc-400 flex items-center justify-center">
+      Fabricate
     </div>
-  );
+  )
 }
 
-export default App;
+export default App

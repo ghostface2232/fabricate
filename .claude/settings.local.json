@@ -5,7 +5,8 @@
       "Bash(npm install:*)",
       "Bash(npx:*)",
       "Bash(printf '\\\\n\\\\n\\\\n')",
-      "Bash(npm ls:*)"
+      "Bash(npm ls:*)",
+      "Bash(npm uninstall:*)"
     ]
   }
 }

@@ -1,0 +1,1 @@
+D:/AI/fabricate/AGENTS.md

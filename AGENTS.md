@@ -3,7 +3,7 @@
 ## 프로젝트 개요
 산업 디자인 렌더링용 PBR 재질 패턴 생성기.
 직조 패브릭(평직, 능직, 수자직)과 카본 파이버(평직, 능직) 패턴을
-프로시저럴하게 생성하고, Full PBR 텍스처 세트를 PNG로 내보내는 웹 도구.
+Procedural하게 생성하고, Full PBR 텍스처 세트를 PNG로 내보내는 웹 도구.
 
 ## 아키텍처 핵심 규칙
 1. 패턴 생성 엔진(src/engine/)은 React 의존성이 없어야 한다. 독립 실행 가능해야 한다.
@@ -27,8 +27,8 @@
 - Three.js r183 (직접 제어)
 - WebGL2 네이티브 GLSL 셰이더
 - Zustand 5 (상태 관리)
-- browser-fs-access (파일 저장)
-- idb (IndexedDB, 프리셋)
+- browser-fs-access (외부 파일 입출력)
+- OPFS (내부 워크스페이스, 프리셋 저장, 자동 저장)
 
 ## 코드 스타일
 - 컴포넌트 파일명: PascalCase.tsx
