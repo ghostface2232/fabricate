@@ -30,7 +30,8 @@ float yarnProfile(float d, float r) {
 void main() {
   // ── Shear 좌표계 (Height Map과 동일) ──
   vec2 tiledUV = v_uv * u_density;
-  float shear = sin(u_twistAngle) * u_twistIntensity;
+  float rawShear = sin(u_twistAngle) * u_twistIntensity;
+  float shear = round(rawShear * u_density) / u_density;
 
   vec2 sh = vec2(
     tiledUV.x + tiledUV.y * shear,
@@ -53,10 +54,18 @@ void main() {
   float aaY = mix(1.0, smoothstep(0.0, fw * 3.0, dBnd.y), abs(hardOver - nOverY));
   float overFactor = mix(0.5, hardOver, min(aaX, aaY));
 
-  // ── 원사 프로파일 ──
+  // ── 원사 프로파일 (유기적 변형 적용) ──
   float halfR = u_yarnThickness * 0.7;
-  float warpP = yarnProfile(dist.x, halfR);
-  float weftP = yarnProfile(dist.y, halfR);
+
+  // 원사 경계를 약간 물결치게: 셀마다 다른 위상
+  float distortX = sin(sh.y * 18.0 + cellIdx.x * 7.3) * 0.006
+                 + sin(sh.y * 31.0) * 0.004;
+  float distortY = sin(sh.x * 18.0 + cellIdx.y * 5.9) * 0.006
+                 + sin(sh.x * 31.0) * 0.004;
+  vec2 organicDist = dist + vec2(distortX, distortY);
+
+  float warpP = yarnProfile(organicDist.x, halfR);
+  float weftP = yarnProfile(organicDist.y, halfR);
 
   // ── 프로파일 기반 색상 블렌딩 ──
   // 경사 위(warp-over): 경사색이 지배, 틈새로 위사 보임
@@ -68,6 +77,12 @@ void main() {
   vec3 colorWeftOver = mix(bgWeftOver, u_color2, smoothstep(0.0, 0.3, weftP));
 
   vec3 yarnColor = mix(colorWeftOver, colorWarpOver, overFactor);
+
+  // 원사 길이 방향 섬유 톤 변화
+  float warpTone = sin(sh.y * 25.0 + cellIdx.x * 3.1) * 0.025 * warpP;
+  float weftTone = sin(sh.x * 25.0 + cellIdx.y * 4.7) * 0.025 * weftP;
+  float fiberTone = mix(weftTone, warpTone, overFactor);
+  yarnColor *= 1.0 + fiberTone;
 
   // Height 기반 셀프 섀도
   float heightValue = texture(u_heightMap, v_uv).r;

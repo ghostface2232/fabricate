@@ -29,7 +29,9 @@ float yarnProfile(float d, float r) {
 void main() {
   vec2 tiledUV = v_uv * u_density;
   float halfR = u_yarnThickness * 0.7;
-  float shear = sin(u_twistAngle) * u_twistIntensity;
+  // shear 양자화: density * shear를 정수로 맞춰 타일링 이음새 제거
+  float rawShear = sin(u_twistAngle) * u_twistIntensity;
+  float shear = round(rawShear * u_density) / u_density;
 
   // shear 좌표 → 셀 분율 / 원사 중심 거리
   vec2 sh = vec2(
@@ -49,8 +51,8 @@ void main() {
 
   vec2 dBnd = min(f, 1.0 - f);
   float fw = max(fwidth(sh.x), fwidth(sh.y));
-  float aaX = mix(1.0, smoothstep(0.0, fw * 3.0, dBnd.x), abs(hardOver - nOverX));
-  float aaY = mix(1.0, smoothstep(0.0, fw * 3.0, dBnd.y), abs(hardOver - nOverY));
+  float aaX = mix(1.0, smoothstep(0.0, fw * 5.0, dBnd.x), abs(hardOver - nOverX));
+  float aaY = mix(1.0, smoothstep(0.0, fw * 5.0, dBnd.y), abs(hardOver - nOverY));
   float overFactor = mix(0.5, hardOver, min(aaX, aaY));
 
   // ── 교차점 짓눌림 (pinch): 수직 원사 근접 시 반경 축소 ──
@@ -64,9 +66,9 @@ void main() {
   float warpP = yarnProfile(dist.x, r.x);
   float weftP = yarnProfile(dist.y, r.y);
 
-  // 미세 줄무늬 (프로파일에 곱해서 원사 위에서만)
-  float warpS = sin(tiledUV.y * 40.0) * 0.012 * warpP;
-  float weftS = sin(tiledUV.x * 40.0) * 0.012 * weftP;
+  // 미세 줄무늬 (다중 주파수 합성, 경계 연속)
+  float warpS = (sin(sh.y * 40.0) + sin(sh.y * 27.0 + 1.7) * 0.5) * 0.008 * warpP;
+  float weftS = (sin(sh.x * 40.0) + sin(sh.x * 27.0 + 2.3) * 0.5) * 0.008 * weftP;
 
   // ── 높이 산출 ──
   float crossing = warpP * weftP;
@@ -80,16 +82,11 @@ void main() {
 
   float h = mix(hf, hw, overFactor);
 
-  // ── 경계 크레바스: 상태 전환 경계에서 골 생성 ──
-  float valleyWidth = 0.20;
+  // ── 경계 크레바스: 상태 전환 경계에서 미세한 골 ──
+  float valleyWidth = 0.12;
   float valleyX = smoothstep(valleyWidth, 0.0, dBnd.x) * abs(hardOver - nOverX);
   float valleyY = smoothstep(valleyWidth, 0.0, dBnd.y) * abs(hardOver - nOverY);
-  h -= max(valleyX, valleyY) * 0.15;
-
-  // ── 교차점 가장자리 크레바스: 원사 프로파일 전이대에서 골 생성 ──
-  float warpEdge = 4.0 * warpP * (1.0 - warpP);
-  float weftEdge = 4.0 * weftP * (1.0 - weftP);
-  h -= warpEdge * weftEdge * 0.10;
+  h -= max(valleyX, valleyY) * 0.04;
 
   // ── 틈새 함몰: 원사 커버리지 낮은 영역 ──
   float coverage = max(warpP, weftP);
