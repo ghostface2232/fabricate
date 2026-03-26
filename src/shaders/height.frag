@@ -12,7 +12,13 @@ uniform float u_flattening;
 in vec2 v_uv;
 out vec4 fragColor;
 
-// 원사 단면 프로파일 — (1-t²)²(1+1.5t²)
+// 매트릭스 셀의 over/under 값 (0.0 또는 1.0)
+float sampleWeave(vec2 cellIdx) {
+  vec2 uv = (mod(cellIdx, u_matrixSize) + 0.5) / u_matrixSize;
+  return step(0.5, texture(u_weaveMatrix, uv).r);
+}
+
+// 원사 단면: C¹ smooth 다항식 (1-t²)²(1+1.5t²)
 float yarnProfile(float d, float r) {
   float t = clamp(abs(d) / r, 0.0, 1.0);
   float s = t * t;
@@ -22,76 +28,55 @@ float yarnProfile(float d, float r) {
 
 void main() {
   vec2 tiledUV = v_uv * u_density;
-  float halfThickness = u_yarnThickness * 0.7;
-
+  float halfR = u_yarnThickness * 0.7;
   float shear = sin(u_twistAngle) * u_twistIntensity;
 
-  float sheared_x = tiledUV.x + tiledUV.y * shear;
-  float sheared_y = tiledUV.y + tiledUV.x * shear;
-  float warpDist = fract(sheared_x) - 0.5;
-  float weftDist = fract(sheared_y) - 0.5;
+  // shear 좌표 → 셀 분율 / 원사 중심 거리
+  vec2 sh = vec2(
+    tiledUV.x + tiledUV.y * shear,
+    tiledUV.y + tiledUV.x * shear
+  );
+  vec2 cellIdx = floor(sh);
+  vec2 f = fract(sh);        // 셀 내 분율 [0,1)
+  vec2 dist = f - 0.5;       // 원사 중심까지 거리 [-0.5, 0.5)
 
-  // 매트릭스 룩업
-  float warpIdx = floor(sheared_x);
-  float weftIdx = floor(sheared_y);
-  vec2 matCoord = mod(vec2(warpIdx, weftIdx), u_matrixSize);
-  vec2 texCoord = (matCoord + 0.5) / u_matrixSize;
-  float weaveVal = texture(u_weaveMatrix, texCoord).r;
+  float hardOver = sampleWeave(cellIdx);
 
-  // ── 셀 경계 AA (상태 변경 경계에서만) ──
-  float hardOver = step(0.5, weaveVal);
-  float fx = fract(sheared_x);
-  float fy = fract(sheared_y);
+  // ── 셀 경계 AA (상태가 바뀌는 경계에서만) ──
+  vec2 nDir = mix(vec2(-1.0), vec2(1.0), step(0.5, f));
+  float nOverX = sampleWeave(cellIdx + vec2(nDir.x, 0.0));
+  float nOverY = sampleWeave(cellIdx + vec2(0.0, nDir.y));
 
-  float nIdxX = warpIdx + (fx >= 0.5 ? 1.0 : -1.0);
-  float nIdxY = weftIdx + (fy >= 0.5 ? 1.0 : -1.0);
-  vec2 nMatX = mod(vec2(nIdxX, weftIdx), u_matrixSize);
-  vec2 nMatY = mod(vec2(warpIdx, nIdxY), u_matrixSize);
-  float nWeaveX = step(0.5, texture(u_weaveMatrix, (nMatX + 0.5) / u_matrixSize).r);
-  float nWeaveY = step(0.5, texture(u_weaveMatrix, (nMatY + 0.5) / u_matrixSize).r);
+  vec2 dBnd = min(f, 1.0 - f);
+  float fw = max(fwidth(sh.x), fwidth(sh.y));
+  float aaX = mix(1.0, smoothstep(0.0, fw * 3.0, dBnd.x), abs(hardOver - nOverX));
+  float aaY = mix(1.0, smoothstep(0.0, fw * 3.0, dBnd.y), abs(hardOver - nOverY));
+  float overFactor = mix(0.5, hardOver, min(aaX, aaY));
 
-  float diffX = abs(hardOver - nWeaveX);
-  float diffY = abs(hardOver - nWeaveY);
-  float dBndX = min(fx, 1.0 - fx);
-  float dBndY = min(fy, 1.0 - fy);
-  float fw = max(fwidth(sheared_x), fwidth(sheared_y));
-  float aaX = mix(1.0, smoothstep(0.0, fw * 3.0, dBndX), diffX);
-  float aaY = mix(1.0, smoothstep(0.0, fw * 3.0, dBndY), diffY);
-  float aa = min(aaX, aaY);
-  float overFactor = mix(0.5, hardOver, aa);
+  // ── 교차점 짓눌림 (pinch): 수직 원사 근접 시 반경 축소 ──
+  vec2 prox = vec2(
+    smoothstep(halfR, 0.0, abs(dist.y)),
+    smoothstep(halfR, 0.0, abs(dist.x))
+  );
+  vec2 r = halfR * (1.0 - 0.02 * prox);
 
-  // ── 교차점 짓눌림 (pinch) ──
-  float pinchAmount = 0.02;
-  float weftProximity = smoothstep(halfThickness, 0.0, abs(weftDist));
-  float warpProximity = smoothstep(halfThickness, 0.0, abs(warpDist));
-  float warpR = halfThickness * (1.0 - pinchAmount * weftProximity);
-  float weftR = halfThickness * (1.0 - pinchAmount * warpProximity);
+  // 원사 프로파일
+  float warpP = yarnProfile(dist.x, r.x);
+  float weftP = yarnProfile(dist.y, r.y);
 
-  float warpProfile = yarnProfile(warpDist, warpR);
-  float weftProfile = yarnProfile(weftDist, weftR);
+  // 미세 줄무늬 (프로파일에 곱해서 원사 위에서만)
+  float warpS = sin(tiledUV.y * 40.0) * 0.012 * warpP;
+  float weftS = sin(tiledUV.x * 40.0) * 0.012 * weftP;
 
-  float warpStripe = sin(tiledUV.y * 40.0) * 0.012;
-  float weftStripe = sin(tiledUV.x * 40.0) * 0.012;
-
-  // ── 교차 전환 ──
-  float crossing = warpProfile * weftProfile;
+  // ── 높이 산출 ──
+  float crossing = warpP * weftP;
   float topBase = mix(0.58, 0.95, crossing);
-  float bottomBase = mix(0.40, 0.05, crossing);
-  float flattenFactor = 1.0 - u_flattening * crossing;
+  float botBase = mix(0.40, 0.05, crossing);
+  float flatten = 1.0 - u_flattening * crossing;
 
-  // warp-over / weft-over 각각의 최종 height를 독립 계산
-  float topH_w = topBase * warpProfile * flattenFactor + warpStripe * warpProfile;
-  float botH_w = bottomBase * weftProfile + weftStripe * weftProfile;
-  float blend_w = smoothstep(0.0, 0.45, warpProfile);
-  float height_w = mix(botH_w, topH_w, blend_w);
+  // warp-over / weft-over 각각의 최종 height를 독립 계산 후 블렌딩
+  float hw = mix(botBase * weftP + weftS, topBase * warpP * flatten + warpS, smoothstep(0.0, 0.45, warpP));
+  float hf = mix(botBase * warpP + warpS, topBase * weftP * flatten + weftS, smoothstep(0.0, 0.45, weftP));
 
-  float topH_f = topBase * weftProfile * flattenFactor + weftStripe * weftProfile;
-  float botH_f = bottomBase * warpProfile + warpStripe * warpProfile;
-  float blend_f = smoothstep(0.0, 0.45, weftProfile);
-  float height_f = mix(botH_f, topH_f, blend_f);
-
-  // 최종: 두 완성된 height를 한 번만 블렌딩
-  float height = mix(height_f, height_w, overFactor);
-
-  fragColor = vec4(vec3(height), 1.0);
+  fragColor = vec4(vec3(mix(hf, hw, overFactor)), 1.0);
 }
