@@ -57,7 +57,7 @@ function CenterPreview({
   }, [pixels]);
 
   return (
-    <div className="flex flex-col items-center gap-3">
+    <div className="flex flex-col items-center gap-3 w-full h-full justify-center px-6 py-4">
       <span className="text-xs text-zinc-500 uppercase tracking-wider">
         {currentMap}
       </span>
@@ -65,8 +65,9 @@ function CenterPreview({
         ref={canvasRef}
         width={CANVAS_SIZE}
         height={CANVAS_SIZE}
-        className="border border-zinc-800 rounded"
+        className="border border-zinc-800 rounded max-w-full max-h-[calc(100%-2rem)] object-contain"
         style={{
+          aspectRatio: '1 / 1',
           opacity: transitioning ? 0.4 : 1,
           transform: transitioning ? 'scale(0.99)' : 'scale(1)',
           transition: 'opacity 150ms ease-out, transform 150ms ease-out',

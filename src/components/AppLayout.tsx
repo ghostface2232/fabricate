@@ -87,7 +87,7 @@ export default function AppLayout({
         </div>
 
         {/* Center Preview */}
-        <div className="flex-1 flex items-center justify-center bg-zinc-950 min-w-0 relative">
+        <div className="flex-1 flex items-center justify-center bg-zinc-950 min-w-0 overflow-hidden relative">
           {center}
           {isRendering && (
             <div className="absolute inset-0 flex items-center justify-center bg-zinc-950/70">

@@ -20,7 +20,7 @@ export interface WeaveParams {
   density: number;
   /** 실 두께 — 셀 대비 원사 직경 비율 (0.1-1.0) */
   yarnThickness: number;
-  /** 꼬임 각도 (0-90도) */
+  /** 꼬임 각도 (0-40도) */
   twistAngle: number;
   /** 교차점에서 원사가 납작해지는 정도 (0-1) */
   flattening: number;

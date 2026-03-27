@@ -1,5 +1,6 @@
 import { usePatternStore } from '@/stores/patternStore';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { Label } from '@/components/ui/label';
 import type { PatternType } from '@/types/pattern';
 
 const CATEGORIES = [
@@ -28,9 +29,7 @@ export default function PatternTypeSelector() {
     <div className="space-y-4">
       {CATEGORIES.map((cat) => (
         <div key={cat.label} className="space-y-2.5">
-          <span className="text-xs text-zinc-400">
-            {cat.label}
-          </span>
+          <Label className="text-zinc-400">{cat.label}</Label>
           <ToggleGroup
             type="single"
             value={patternType}

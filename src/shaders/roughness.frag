@@ -94,15 +94,23 @@ void main() {
   zoneRoughness = mix(zoneRoughness, sidewallRoughness, sidewallMask);
   zoneRoughness = mix(zoneRoughness, valleyRoughness, valleyMask);
 
-  // ── 방향성 섬유 패턴 (회전 기반 — 섬유에 항상 수직) ──
+  // ── 방향성 섬유 패턴 (Height와 동일 주파수 — PBR 일관성) ──
   float effTwist = u_twistAngle;
   float twC = cos(effTwist);
   float twS = sin(effTwist);
   float warpFiberPhase = tiledUV.x * twS + tiledUV.y * twC;
   float weftFiberPhase = tiledUV.x * twC + tiledUV.y * twS;
 
-  float warpFiber = sin(warpFiberPhase * 120.0) * 0.5 + 0.5;
-  float weftFiber = sin(weftFiberPhase * 120.0) * 0.5 + 0.5;
+  // 주 패턴: Height와 동일 (40 + 27 dual-freq)
+  float warpFiberMain = (sin(warpFiberPhase * 40.0) + sin(warpFiberPhase * 27.0 + 1.7) * 0.5) / 1.5;
+  float weftFiberMain = (sin(weftFiberPhase * 40.0) + sin(weftFiberPhase * 27.0 + 2.3) * 0.5) / 1.5;
+
+  // 미세 섬유 디테일 (법선 맵 해상도 이하 마이크로 구조)
+  float warpFiberMicro = sin(warpFiberPhase * 120.0) * 0.3;
+  float weftFiberMicro = sin(weftFiberPhase * 120.0) * 0.3;
+
+  float warpFiber = (warpFiberMain + warpFiberMicro) * 0.5 + 0.5;
+  float weftFiber = (weftFiberMain + weftFiberMicro) * 0.5 + 0.5;
 
   float warpVis = warpP * mix(0.3, 1.0, overFactor);
   float weftVis = weftP * mix(1.0, 0.3, overFactor);

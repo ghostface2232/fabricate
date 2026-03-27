@@ -1,15 +1,15 @@
 "use client"
 
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useRef, useState } from "react"
 
 import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import {
   Popover,
   PopoverContent,
   PopoverTitle,
   PopoverTrigger,
 } from "@/components/ui/popover"
-import { Slider } from "@/components/ui/slider"
 import { cn } from "@/lib/utils"
 import { hexToRgb01, rgb01ToHex } from "@/utils/colorConvert"
 
@@ -70,52 +70,91 @@ function sanitizeHexInput(value: string) {
   return `#${hex}`
 }
 
-function ChannelRow({
-  label,
-  max,
-  suffix,
-  value,
+function SBPicker({
+  hue,
+  saturation,
+  brightness,
   onChange,
 }: {
-  label: string
-  max: number
-  suffix?: string
-  value: number
-  onChange: (value: number) => void
+  hue: number
+  saturation: number
+  brightness: number
+  onChange: (s: number, b: number) => void
 }) {
+  const ref = useRef<HTMLDivElement>(null)
+  const dragging = useRef(false)
+
+  const calc = (e: React.PointerEvent | PointerEvent) => {
+    const r = ref.current!.getBoundingClientRect()
+    const s = Math.round(Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * 100)
+    const b = Math.round((1 - Math.max(0, Math.min(1, (e.clientY - r.top) / r.height))) * 100)
+    onChange(s, b)
+  }
+
+  const onPointerDown = (e: React.PointerEvent) => {
+    e.preventDefault()
+    dragging.current = true
+    ref.current!.setPointerCapture(e.pointerId)
+    calc(e)
+  }
+  const onPointerMove = (e: React.PointerEvent) => { if (dragging.current) calc(e) }
+  const onPointerUp = () => { dragging.current = false }
+
   return (
-    <div className="grid grid-cols-[18px_1fr_42px] items-center gap-3">
-      <span className="text-[11px] font-mono uppercase tracking-[0.18em] text-zinc-500">
-        {label}
-      </span>
-      <Slider
-        min={0}
-        max={max}
-        step={1}
-        value={[value]}
-        onValueChange={([next]) => onChange(next)}
+    <div
+      ref={ref}
+      className="relative h-[140px] rounded-lg cursor-crosshair overflow-hidden border border-zinc-700/60 select-none"
+      style={{ backgroundColor: `hsl(${hue}, 100%, 50%)` }}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+    >
+      <div className="absolute inset-0" style={{ background: 'linear-gradient(to right, #fff, transparent)' }} />
+      <div className="absolute inset-0" style={{ background: 'linear-gradient(to bottom, transparent, #000)' }} />
+      <div
+        className="absolute size-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow-[0_0_0_1px_rgba(0,0,0,0.3),0_2px_4px_rgba(0,0,0,0.4)] pointer-events-none"
+        style={{ left: `${saturation}%`, top: `${100 - brightness}%` }}
       />
-      <span className="text-right font-mono text-xs tabular-nums text-zinc-400">
-        {value}{suffix}
-      </span>
     </div>
   )
 }
 
-function ColorPreview({ value }: { value: RGB01 }) {
-  const hex = rgb01ToHex(value)
-  const swatchStyle = useMemo(
-    () => ({
-      background: `linear-gradient(135deg, ${hex} 0%, color-mix(in srgb, ${hex} 64%, black) 100%)`,
-    }),
-    [hex]
-  )
+function HueBar({
+  hue,
+  onChange,
+}: {
+  hue: number
+  onChange: (h: number) => void
+}) {
+  const ref = useRef<HTMLDivElement>(null)
+  const dragging = useRef(false)
+
+  const calc = (e: React.PointerEvent | PointerEvent) => {
+    const r = ref.current!.getBoundingClientRect()
+    onChange(Math.round(Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * 360))
+  }
+
+  const onPointerDown = (e: React.PointerEvent) => {
+    e.preventDefault()
+    dragging.current = true
+    ref.current!.setPointerCapture(e.pointerId)
+    calc(e)
+  }
+  const onPointerMove = (e: React.PointerEvent) => { if (dragging.current) calc(e) }
+  const onPointerUp = () => { dragging.current = false }
 
   return (
-    <div className="rounded-xl border border-zinc-800 bg-zinc-950/80 p-3">
+    <div
+      ref={ref}
+      className="relative h-3 rounded-full cursor-pointer select-none"
+      style={{ background: 'linear-gradient(to right, #f00 0%, #ff0 17%, #0f0 33%, #0ff 50%, #00f 67%, #f0f 83%, #f00 100%)' }}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+    >
       <div
-        className="h-[4.5rem] rounded-lg border border-white/10 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
-        style={swatchStyle}
+        className="absolute size-4 -translate-x-1/2 -translate-y-1/2 top-1/2 rounded-full border-2 border-white shadow-[0_0_0_1px_rgba(0,0,0,0.3),0_2px_4px_rgba(0,0,0,0.4)] pointer-events-none"
+        style={{ left: `${(hue / 360) * 100}%` }}
       />
     </div>
   )
@@ -189,11 +228,9 @@ export function ColorField({
 
   // draft 파생 값
   const draftHsb = rgb01ToHsb(draft)
-  const draftHex = rgb01ToHex(draft)
 
   // 커밋 값 (트리거 버튼에 표시)
   const committedHex = rgb01ToHex(value)
-  const committedHsb = rgb01ToHsb(value)
 
   // draft HSB 슬라이더 변경 → draft만 갱신
   const updateDraftHsb = (newHsb: HSB) => {
@@ -232,66 +269,47 @@ export function ColorField({
   return (
     <div className={cn("space-y-2.5", className)}>
       <div className="flex items-center justify-between gap-3">
-        <span className="text-[11px] uppercase tracking-[0.2em] text-zinc-500">
-          {label}
-        </span>
+        <Label className="text-zinc-400">{label}</Label>
         <Popover open={open} onOpenChange={handleOpenChange}>
           <PopoverTrigger asChild>
             <button
               type="button"
-              className="group flex min-w-[184px] items-center gap-3 rounded-xl border border-zinc-800 bg-zinc-900/80 px-3.5 py-2.5 text-left transition-colors hover:border-zinc-700 hover:bg-zinc-900 focus-visible:border-zinc-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-700"
+              className="group flex items-center gap-2.5 rounded-lg border border-zinc-800 bg-zinc-900/80 px-3 py-1.5 text-left transition-colors hover:border-zinc-700 hover:bg-zinc-900 focus-visible:border-zinc-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-700"
             >
               <span
-                className="size-6 shrink-0 rounded-md border border-white/10 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
+                className="size-5 shrink-0 rounded border border-white/10 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
                 style={{ backgroundColor: committedHex }}
               />
-              <span className="min-w-0 flex-1">
-                <span className="block truncate font-mono text-xs tracking-[0.16em] text-zinc-200 uppercase">
-                  {committedHex}
-                </span>
-                <span className="block truncate text-[11px] text-zinc-500 group-hover:text-zinc-400">
-                  H {committedHsb[0]} / S {committedHsb[1]} / B {committedHsb[2]}
-                </span>
+              <span className="font-mono text-xs tracking-[0.14em] text-zinc-200 uppercase">
+                {committedHex}
               </span>
             </button>
           </PopoverTrigger>
           <PopoverContent
-            align="end"
-            sideOffset={8}
+            side="right"
+            align="start"
+            sideOffset={12}
             onOpenAutoFocus={(e) => e.preventDefault()}
             className="w-[280px] gap-4 rounded-2xl border border-zinc-800 bg-zinc-900/96 p-4 text-zinc-200 shadow-2xl shadow-black/40 backdrop-blur"
           >
             <PopoverTitle className="text-sm font-medium text-zinc-100">
               {label}
             </PopoverTitle>
-            <ColorPreview value={draft} />
+            <SBPicker
+              hue={draftHsb[0]}
+              saturation={draftHsb[1]}
+              brightness={draftHsb[2]}
+              onChange={(s, b) => updateDraftHsb([draftHsb[0], s, b])}
+            />
+            <HueBar
+              hue={draftHsb[0]}
+              onChange={(h) => updateDraftHsb([h, draftHsb[1], draftHsb[2]])}
+            />
             <HexField
               value={hexDraft}
               onChange={setHexDraft}
               onCommit={applyHexToDraft}
             />
-            <div className="space-y-3 rounded-xl border border-zinc-800 bg-zinc-950/70 p-3">
-              <ChannelRow
-                label="H"
-                max={360}
-                value={draftHsb[0]}
-                onChange={(next) => updateDraftHsb([next, draftHsb[1], draftHsb[2]])}
-              />
-              <ChannelRow
-                label="S"
-                max={100}
-                suffix="%"
-                value={draftHsb[1]}
-                onChange={(next) => updateDraftHsb([draftHsb[0], next, draftHsb[2]])}
-              />
-              <ChannelRow
-                label="B"
-                max={100}
-                suffix="%"
-                value={draftHsb[2]}
-                onChange={(next) => updateDraftHsb([draftHsb[0], draftHsb[1], next])}
-              />
-            </div>
           </PopoverContent>
         </Popover>
       </div>

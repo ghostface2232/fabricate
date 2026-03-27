@@ -99,7 +99,7 @@ function SliderRow({
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
-        <Label className="text-xs text-zinc-400">{label}</Label>
+        <Label className="text-zinc-400">{label}</Label>
         <InlineValue value={localVal} step={step} min={min} max={max} onCommit={onChange} />
       </div>
       <Slider
@@ -202,7 +202,7 @@ export default function ParamControlPanel() {
               label="Twist"
               value={params.twistAngle}
               min={0}
-              max={90}
+              max={40}
               step={1}
               onChange={(v) => updateParams({ twistAngle: v })}
             />
@@ -215,7 +215,7 @@ export default function ParamControlPanel() {
         <>
           <Separator className="bg-zinc-800" />
           <div className="space-y-2.5">
-            <Label className="text-xs text-zinc-400">Direction</Label>
+            <Label className="text-zinc-400">Direction</Label>
             <ToggleGroup
               type="single"
               value={String(params.twillDirection)}
@@ -266,7 +266,7 @@ export default function ParamControlPanel() {
           <Separator className="bg-zinc-800" />
           <div className="space-y-5">
             <div className="space-y-2.5">
-              <Label className="text-xs text-zinc-400">Tow Size</Label>
+              <Label className="text-zinc-400">Tow Size</Label>
               <Select
                 value={String(params.towK)}
                 onValueChange={(v) => updateParams({ towK: Number(v) as 1 | 3 | 6 })}
@@ -322,7 +322,7 @@ export default function ParamControlPanel() {
             onChange={(v) => updatePBRSettings({ normalStrength: v })}
           />
           <div className="space-y-2.5">
-            <Label className="text-xs text-zinc-400">Normal Filter</Label>
+            <Label className="text-zinc-400">Normal Filter</Label>
             <ToggleGroup
               type="single"
               value={pbrSettings.normalFilter}

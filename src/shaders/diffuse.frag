@@ -84,11 +84,14 @@ void main() {
 
   vec3 yarnColor = mix(colorWeftOver, colorWarpOver, overFactor);
 
-  // 원사 길이 방향 섬유 톤 변화
-  float warpTone = sin(warpPhase * 25.0 + cellIdx.x * 3.1) * 0.025 * warpP;
-  float weftTone = sin(weftPhase * 25.0 + cellIdx.y * 4.7) * 0.025 * weftP;
-  float fiberTone = mix(weftTone, warpTone, overFactor);
-  yarnColor *= 1.0 + fiberTone;
+  // 원사 길이 방향 섬유 톤 변화 (Height와 동일 주파수 — PBR 일관성)
+  float warpToneRaw = (sin(warpPhase * 40.0) + sin(warpPhase * 27.0 + 1.7) * 0.5) / 1.5;
+  float weftToneRaw = (sin(weftPhase * 40.0) + sin(weftPhase * 27.0 + 2.3) * 0.5) / 1.5;
+  float warpVis = warpP * mix(0.3, 1.0, overFactor);
+  float weftVis = weftP * mix(1.0, 0.3, overFactor);
+  float totalVis = warpVis + weftVis + 0.001;
+  float fiberTone = (warpToneRaw * warpVis + weftToneRaw * weftVis) / totalVis;
+  yarnColor *= 1.0 + fiberTone * 0.035;
 
   // Height 기반 셀프 섀도
   float heightValue = texture(u_heightMap, v_uv).r;
