@@ -5,10 +5,10 @@ import type { PBRMapType } from '@/types/pattern';
 
 export function usePatternEngine() {
   const engineRef = useRef<PatternEngine | null>(null);
-  const rafRef = useRef<number>(0);
   const [heightPixels, setHeightPixels] = useState<Uint8Array | null>(null);
   const [allMapPixels, setAllMapPixels] = useState<Record<PBRMapType, Uint8Array> | null>(null);
   const [isReady, setIsReady] = useState(false);
+  const [isRendering, setIsRendering] = useState(false);
 
   const params = usePatternStore((s) => s.params);
   const pbrSettings = usePatternStore((s) => s.pbrSettings);
@@ -20,14 +20,13 @@ export function usePatternEngine() {
     setIsReady(true);
 
     return () => {
-      cancelAnimationFrame(rafRef.current);
       engine.dispose();
       engineRef.current = null;
       setIsReady(false);
     };
   }, []);
 
-  // params/pbrSettings 변경 시 rAF 디바운싱으로 렌더링
+  // params/pbrSettings 변경 시 setTimeout으로 렌더링 (로딩 UI 표시 시간 확보)
   const renderRef = useRef<() => void>();
   renderRef.current = useCallback(() => {
     const engine = engineRef.current;
@@ -35,16 +34,19 @@ export function usePatternEngine() {
     engine.generate(params, pbrSettings);
     setHeightPixels(engine.getHeightPixels());
     setAllMapPixels(engine.getAllMapPixels());
+    setIsRendering(false);
   }, [params, pbrSettings]);
 
   useEffect(() => {
     if (!isReady) return;
+    setIsRendering(true);
 
-    cancelAnimationFrame(rafRef.current);
-    rafRef.current = requestAnimationFrame(() => {
+    const id = setTimeout(() => {
       renderRef.current?.();
-    });
+    }, 16);
+
+    return () => clearTimeout(id);
   }, [params, pbrSettings, isReady]);
 
-  return { engine: engineRef.current, heightPixels, allMapPixels, isReady };
+  return { engine: engineRef.current, heightPixels, allMapPixels, isReady, isRendering };
 }
