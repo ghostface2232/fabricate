@@ -13,11 +13,11 @@ import { Download, ChevronDown } from 'lucide-react';
 import PatternTypeSelector from '@/components/panels/PatternTypeSelector';
 import ParamControlPanel from '@/components/panels/ParamControlPanel';
 import PBRThumbnailPanel from '@/components/panels/PBRThumbnailPanel';
+import PreviewContainer from '@/components/preview/PreviewContainer';
 import type { PBRMapType } from '@/types/pattern';
 import type { PatternEngine } from '@/engine/PatternEngine';
 
 interface AppLayoutProps {
-  center: React.ReactNode;
   selectedMap: PBRMapType;
   onSelectMap: (map: PBRMapType) => void;
   engine: PatternEngine | null;
@@ -26,7 +26,6 @@ interface AppLayoutProps {
 }
 
 export default function AppLayout({
-  center,
   selectedMap,
   onSelectMap,
   engine,
@@ -88,9 +87,9 @@ export default function AppLayout({
 
         {/* Center Preview */}
         <div className="flex-1 flex items-center justify-center bg-zinc-950 min-w-0 overflow-hidden relative">
-          {center}
+          <PreviewContainer engine={engine} renderVersion={renderVersion} />
           {isRendering && (
-            <div className="absolute inset-0 flex items-center justify-center bg-zinc-950/70">
+            <div className="absolute inset-0 flex items-center justify-center bg-zinc-950/70 pointer-events-none">
               <div className="flex items-center gap-2 text-sm text-zinc-400">
                 <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
                   <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" className="opacity-25" />
@@ -102,7 +101,7 @@ export default function AppLayout({
           )}
         </div>
 
-        {/* Right Panel — 폭을 뷰포트 높이 기반으로 계산해서 정사각형 썸네일 5개 딱 맞춤 */}
+        {/* Right Panel */}
         <div
           className="shrink-0 border-l border-zinc-800 bg-zinc-900/60 p-4 flex flex-col min-h-0"
           style={{ width: 'calc((100vh - 48px - 24px - 5 * 18px - 4 * 8px) / 5 + 24px)' }}

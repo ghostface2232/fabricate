@@ -28,9 +28,9 @@ float yarnProfile(float d, float r) {
 void main() {
   vec2 tiledUV = v_uv * u_density;
   float halfR = u_yarnThickness * 0.7;
-  // shear 양자화: density * shear를 정수로 맞춰 타일링 이음새 제거
+  // shear 양자화: density * shear를 매트릭스 크기의 배수로 맞춰 타일링 이음새 제거
   float rawShear = sin(u_twistAngle);
-  float shear = round(rawShear * u_density) / u_density;
+  float shear = round(rawShear * u_density / u_matrixSize.x) * u_matrixSize.x / u_density;
 
   // shear 좌표 → 셀 분율 / 원사 중심 거리
   vec2 sh = vec2(
@@ -65,12 +65,14 @@ void main() {
   float warpP = yarnProfile(dist.x, r.x);
   float weftP = yarnProfile(dist.y, r.y);
 
-  // 섬유 방향 기준 위상 (회전 기반 — 주름이 섬유에 항상 수직)
+  // 섬유 방향 기준 위상 (셀 로컬 좌표 기반 — 타일 경계 이음새 제거)
   float effTwist = u_twistAngle;
   float twC = cos(effTwist);
   float twS = sin(effTwist);
-  float warpPhase = tiledUV.x * twS + tiledUV.y * twC;
-  float weftPhase = tiledUV.x * twC + tiledUV.y * twS;
+  // 매트릭스 주기로 반복하는 셀 오프셋 (셀 간 위상 변화, 타일링 유지)
+  vec2 mc = mod(cellIdx, u_matrixSize);
+  float warpPhase = f.x * twS + f.y * twC + mc.x * 1.37 + mc.y * 0.73;
+  float weftPhase = f.x * twC + f.y * twS + mc.x * 0.73 + mc.y * 1.37;
 
   // 미세 줄무늬 (다중 주파수 합성)
   float warpS = (sin(warpPhase * 40.0) + sin(warpPhase * 27.0 + 1.7) * 0.5) * 0.008 * warpP;

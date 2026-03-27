@@ -39,7 +39,7 @@ void main() {
   // ── 원사 방향 계산 ──
   vec2 tiledUV = v_uv * u_density;
   float rawShear = sin(u_twistAngle);
-  float shear = round(rawShear * u_density) / u_density;
+  float shear = round(rawShear * u_density / u_matrixSize.x) * u_matrixSize.x / u_density;
   vec2 sh = vec2(
     tiledUV.x + tiledUV.y * shear,
     tiledUV.y + tiledUV.x * shear
@@ -94,12 +94,13 @@ void main() {
   zoneRoughness = mix(zoneRoughness, sidewallRoughness, sidewallMask);
   zoneRoughness = mix(zoneRoughness, valleyRoughness, valleyMask);
 
-  // ── 방향성 섬유 패턴 (Height와 동일 주파수 — PBR 일관성) ──
+  // ── 방향성 섬유 패턴 (셀 로컬 좌표 기반 — 타일 경계 이음새 제거) ──
   float effTwist = u_twistAngle;
   float twC = cos(effTwist);
   float twS = sin(effTwist);
-  float warpFiberPhase = tiledUV.x * twS + tiledUV.y * twC;
-  float weftFiberPhase = tiledUV.x * twC + tiledUV.y * twS;
+  vec2 mc = mod(cellIdx, u_matrixSize);
+  float warpFiberPhase = f.x * twS + f.y * twC + mc.x * 1.37 + mc.y * 0.73;
+  float weftFiberPhase = f.x * twC + f.y * twS + mc.x * 0.73 + mc.y * 1.37;
 
   // 주 패턴: Height와 동일 (40 + 27 dual-freq)
   float warpFiberMain = (sin(warpFiberPhase * 40.0) + sin(warpFiberPhase * 27.0 + 1.7) * 0.5) / 1.5;
@@ -121,9 +122,10 @@ void main() {
   float fiberScale = mix(0.5, 1.0, sidewallMask) * (1.0 - 0.3 * valleyMask);
   float fiberVariation = (fiberPattern - 0.5) * u_roughnessVariation * fiberScale;
 
-  // ── 구역별 미세 노이즈 ──
-  float ridgeNoise = sin(sh.x * 200.0 + sh.y * 173.0) * 0.005 * ridgeMask;
-  float valleyNoise = sin(sh.x * 47.0 + sh.y * 83.0) * 0.010 * valleyMask;
+  // ── 구역별 미세 노이즈 (셀 로컬 + 매트릭스 오프셋으로 타일링 유지) ──
+  float noisePhase = f.x * 5.7 + f.y * 4.3 + mc.x * 2.31 + mc.y * 3.17;
+  float ridgeNoise = sin(noisePhase * 35.0) * 0.005 * ridgeMask;
+  float valleyNoise = sin(noisePhase * 15.0 + 1.9) * 0.010 * valleyMask;
 
   // ── 캐비티 ──
   float cavity = max((hL + hR + hU + hD) * 0.25 - height, 0.0);

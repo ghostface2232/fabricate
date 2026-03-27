@@ -65,7 +65,7 @@ export const defaultPresets: Preset[] = [
       type: 'satinWeave',
       warpColor: [0.95, 0.92, 0.85],
       weftColor: [0.88, 0.85, 0.78],
-      density: 36,
+      density: 35,
       yarnThickness: 0.55,
       twistAngle: 0,
       flattening: 0.55,

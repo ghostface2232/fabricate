@@ -30,7 +30,7 @@ void main() {
   // ── Shear 좌표계 (Height Map과 동일) ──
   vec2 tiledUV = v_uv * u_density;
   float rawShear = sin(u_twistAngle);
-  float shear = round(rawShear * u_density) / u_density;
+  float shear = round(rawShear * u_density / u_matrixSize.x) * u_matrixSize.x / u_density;
 
   vec2 sh = vec2(
     tiledUV.x + tiledUV.y * shear,
@@ -56,12 +56,13 @@ void main() {
   // ── 원사 프로파일 (유기적 변형 적용) ──
   float halfR = u_yarnThickness * 0.7;
 
-  // 섬유 방향 기준 위상 (회전 기반 — 디테일이 섬유에 항상 수직)
+  // 섬유 방향 기준 위상 (셀 로컬 좌표 기반 — 타일 경계 이음새 제거)
   float effTwist = u_twistAngle;
   float twC = cos(effTwist);
   float twS = sin(effTwist);
-  float warpPhase = tiledUV.x * twS + tiledUV.y * twC;
-  float weftPhase = tiledUV.x * twC + tiledUV.y * twS;
+  vec2 mc = mod(cellIdx, u_matrixSize);
+  float warpPhase = f.x * twS + f.y * twC + mc.x * 1.37 + mc.y * 0.73;
+  float weftPhase = f.x * twC + f.y * twS + mc.x * 0.73 + mc.y * 1.37;
 
   // 원사 경계를 약간 물결치게: 셀마다 다른 위상
   float distortX = sin(warpPhase * 18.0 + cellIdx.x * 7.3) * 0.006
