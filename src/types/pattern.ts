@@ -24,6 +24,10 @@ export interface WeaveParams {
   twistAngle: number;
   /** 교차점에서 원사가 납작해지는 정도 (0-1) */
   flattening: number;
+  /** 원사 어깨부의 선명도/사각 돔 성향 (0-1) */
+  edgeDefinition: number;
+  /** 원사 길이 방향 볼륨(세그먼트 loft) (0-1) */
+  yarnLoft: number;
   /** 능직 방향: 1 = Z능직, -1 = S능직 (능직 전용) */
   twillDirection: 1 | -1;
   /** 수자직 이동수 (수자직 전용, 기본 2) */
@@ -46,6 +50,10 @@ export interface CarbonParams {
   yarnThickness: number;
   /** 교차점에서 원사가 납작해지는 정도 (0-1) */
   flattening: number;
+  /** 토우 어깨부의 선명도/사각 돔 성향 (0-1) */
+  edgeDefinition: number;
+  /** 토우 길이 방향 볼륨(세그먼트 loft) (0-1) */
+  yarnLoft: number;
   /** 토우 크기 K수: 1K, 3K, 6K */
   towK: 1 | 3 | 6;
   /** 레진 광택 (0-1, clearcoat roughness의 역수) */
@@ -72,8 +80,6 @@ export type PatternParams =
 export interface PBRSettings {
   /** Normal Map 강도 (0.1-5.0, 기본 1.5) */
   normalStrength: number;
-  /** Normal 필터 알고리즘 (기본 'sobel') */
-  normalFilter: 'sobel' | 'scharr';
   /** AO 샘플링 반경 (1.0-10.0, 기본 3.0) */
   aoRadius: number;
   /** AO 강도 (0.0-2.0, 기본 0.8, 패브릭은 과하면 더러워 보이므로 보수적) */

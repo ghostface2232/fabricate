@@ -5,6 +5,7 @@ import { usePatternStore } from '@/stores/patternStore';
 import type { PatternEngine } from '@/engine/PatternEngine';
 
 const MAP_NAMES = ['height', 'normal', 'ao', 'roughness', 'diffuse'] as const;
+const PREVIEW_SPHERE_SEGMENTS = 224;
 
 interface SpherePreview3DProps {
   engine: PatternEngine | null;
@@ -13,10 +14,6 @@ interface SpherePreview3DProps {
 
 export default function SpherePreview3D({ engine, renderVersion }: SpherePreview3DProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
-  const sceneRef = useRef<THREE.Scene | null>(null);
-  const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
-  const controlsRef = useRef<OrbitControls | null>(null);
   const materialRef = useRef<THREE.MeshStandardMaterial | THREE.MeshPhysicalMaterial | null>(null);
   const meshRef = useRef<THREE.Mesh | null>(null);
   const texturesRef = useRef<Record<string, THREE.DataTexture>>({});
@@ -36,16 +33,13 @@ export default function SpherePreview3D({ engine, renderVersion }: SpherePreview
     renderer.setClearColor(0x09090b);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     container.appendChild(renderer.domElement);
-    rendererRef.current = renderer;
 
     // Camera
     const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100);
     camera.position.set(0, 0, 2.8);
-    cameraRef.current = camera;
 
     // Scene
     const scene = new THREE.Scene();
-    sceneRef.current = scene;
 
     // Lighting
     const dirLight = new THREE.DirectionalLight(0xffffff, 1.5);
@@ -55,7 +49,7 @@ export default function SpherePreview3D({ engine, renderVersion }: SpherePreview
     scene.add(new THREE.HemisphereLight(0x606080, 0x404040, 0.5));
 
     // Geometry — uv2 for aoMap
-    const geometry = new THREE.SphereGeometry(1, 128, 128);
+    const geometry = new THREE.SphereGeometry(1, PREVIEW_SPHERE_SEGMENTS, PREVIEW_SPHERE_SEGMENTS);
     geometry.setAttribute('uv2', geometry.getAttribute('uv'));
 
     // Material (placeholder, recreated on type change)
@@ -73,7 +67,6 @@ export default function SpherePreview3D({ engine, renderVersion }: SpherePreview
     controls.autoRotateSpeed = 0.8;
     controls.minDistance = 1.8;
     controls.maxDistance = 5;
-    controlsRef.current = controls;
 
     // Resize
     const ro = new ResizeObserver(([entry]) => {
@@ -105,7 +98,6 @@ export default function SpherePreview3D({ engine, renderVersion }: SpherePreview
       if (container.contains(renderer.domElement)) {
         container.removeChild(renderer.domElement);
       }
-      rendererRef.current = null;
     };
   }, []);
 
@@ -121,14 +113,18 @@ export default function SpherePreview3D({ engine, renderVersion }: SpherePreview
     if (typeKey !== prevTypeRef.current) {
       prevTypeRef.current = typeKey;
       materialRef.current?.dispose();
+      for (const tex of Object.values(texturesRef.current)) tex.dispose();
+      texturesRef.current = {};
+      prevRenderSizeRef.current = 0;
 
       let mat: THREE.MeshStandardMaterial | THREE.MeshPhysicalMaterial;
       if (isCarbon) {
         const glossiness = 'glossiness' in params ? params.glossiness : 0.85;
         mat = new THREE.MeshPhysicalMaterial({
-          clearcoat: 1.0,
-          clearcoatRoughness: 1.0 - glossiness,
-          anisotropy: 0.5,
+          roughness: THREE.MathUtils.lerp(0.38, 0.12, glossiness),
+          clearcoat: THREE.MathUtils.lerp(0.75, 1.0, glossiness),
+          clearcoatRoughness: THREE.MathUtils.lerp(0.24, 0.03, glossiness),
+          anisotropy: THREE.MathUtils.lerp(0.45, 0.85, glossiness),
           anisotropyRotation: Math.PI / 4,
         });
       } else {
@@ -179,15 +175,22 @@ export default function SpherePreview3D({ engine, renderVersion }: SpherePreview
     const texs = texturesRef.current;
     mat.map = texs['diffuse'];
     mat.normalMap = texs['normal'];
-    mat.normalScale = new THREE.Vector2(1, 1);
+    mat.normalScale = isCarbon ? new THREE.Vector2(0.74, 0.74) : new THREE.Vector2(1, 1);
     mat.roughnessMap = texs['roughness'];
     mat.aoMap = texs['ao'];
+    mat.aoMapIntensity = isCarbon ? 0.72 : 0.95;
     mat.displacementMap = texs['height'];
-    mat.displacementScale = 0.02;
+    mat.displacementScale = isCarbon ? 0.01 : 0.028;
+    mesh.geometry.computeBoundingSphere();
+    mesh.geometry.computeBoundingBox();
 
     // Carbon glossiness sync
     if (isCarbon && mat instanceof THREE.MeshPhysicalMaterial) {
-      mat.clearcoatRoughness = 1.0 - (params.glossiness ?? 0.85);
+      const glossiness = params.glossiness ?? 0.85;
+      mat.roughness = THREE.MathUtils.lerp(0.38, 0.12, glossiness);
+      mat.clearcoat = THREE.MathUtils.lerp(0.75, 1.0, glossiness);
+      mat.clearcoatRoughness = THREE.MathUtils.lerp(0.24, 0.03, glossiness);
+      mat.anisotropy = THREE.MathUtils.lerp(0.45, 0.85, glossiness);
     }
 
     mat.needsUpdate = true;

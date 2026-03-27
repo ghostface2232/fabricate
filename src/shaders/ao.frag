@@ -9,7 +9,6 @@ uniform float u_intensity;
 in vec2 v_uv;
 out vec4 fragColor;
 
-// 16-sample Poisson disc offsets (unit disc)
 const vec2 poissonDisc[16] = vec2[16](
   vec2(-0.9465, -0.1724), vec2( 0.3310, -0.8643),
   vec2( 0.8256,  0.0169), vec2(-0.3856,  0.7939),
@@ -27,32 +26,35 @@ float sampleH(vec2 coord) {
 
 void main() {
   float centerH = sampleH(v_uv);
+  float nearOcclusion = 0.0;
+  float farOcclusion = 0.0;
 
-  // Cavity-based AO: 16 Poisson samples
-  float occlusion = 0.0;
   for (int i = 0; i < 16; i++) {
-    vec2 offset = poissonDisc[i] * u_radius * u_texelSize;
-    float sH = sampleH(v_uv + offset);
-    occlusion += max(sH - centerH, 0.0);
+    vec2 baseOffset = poissonDisc[i] * u_radius * u_texelSize;
+    float nearH = sampleH(v_uv + baseOffset * 0.6);
+    float farH = sampleH(v_uv + baseOffset * 1.2);
+    nearOcclusion += max(nearH - centerH, 0.0);
+    farOcclusion += max(farH - centerH, 0.0);
   }
-  occlusion /= 16.0;
 
-  float ao = 1.0 - clamp(occlusion * u_intensity, 0.0, 1.0);
+  nearOcclusion /= 16.0;
+  farOcclusion /= 16.0;
 
-  // 구조적 깊이 AO: 낮은 영역(틈새, 하부 원사)을 어둡게
-  float depthFactor = smoothstep(0.0, 0.7, centerH);
-  ao *= mix(0.25, 1.0, depthFactor);
-
-  // 방향성 캐비티: 십자 샘플링으로 교차점 경계 강조
   float hL = sampleH(v_uv + vec2(-1.0, 0.0) * u_texelSize);
   float hR = sampleH(v_uv + vec2( 1.0, 0.0) * u_texelSize);
   float hU = sampleH(v_uv + vec2( 0.0, 1.0) * u_texelSize);
   float hD = sampleH(v_uv + vec2( 0.0,-1.0) * u_texelSize);
+
   float cavity = max((hL + hR + hU + hD) * 0.25 - centerH, 0.0);
-  ao *= 1.0 - clamp(cavity * u_intensity * 3.0, 0.0, 0.5);
+  float slope = length(vec2(hR - hL, hU - hD));
+  float valleyMask = 1.0 - smoothstep(0.10, 0.68, centerH);
 
-  ao = pow(ao, 1.4);
-  ao = clamp(ao, 0.0, 1.0);
+  float occlusion = nearOcclusion * 1.15 + farOcclusion * 0.85;
+  float ao = 1.0 - clamp(occlusion * u_intensity * 1.25, 0.0, 1.0);
+  ao *= 1.0 - clamp(cavity * (0.8 + u_intensity * 1.6), 0.0, 0.42);
+  ao *= mix(0.58, 1.0, 1.0 - valleyMask);
+  ao = mix(ao, ao * 0.96, smoothstep(0.08, 0.28, slope));
 
+  ao = pow(clamp(ao, 0.0, 1.0), 1.18);
   fragColor = vec4(vec3(ao), 1.0);
 }

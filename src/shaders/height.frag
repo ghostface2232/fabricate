@@ -7,39 +7,137 @@ uniform float u_density;
 uniform float u_yarnThickness;
 uniform float u_twistAngle;
 uniform float u_flattening;
+uniform float u_edgeDefinition;
+uniform float u_yarnLoft;
+uniform float u_gapWidth;
 uniform int u_patternType;  // 0-2: fabric, 3-4: carbon
 
 in vec2 v_uv;
 out vec4 fragColor;
+
+float saturate(float x) {
+  return clamp(x, 0.0, 1.0);
+}
 
 float sampleWeave(vec2 cellIdx) {
   vec2 uv = (mod(cellIdx, u_matrixSize) + 0.5) / u_matrixSize;
   return step(0.5, texture(u_weaveMatrix, uv).r);
 }
 
-// 패브릭 원사 단면: C¹ smooth (1-t²)²(1+1.5t²)
-float yarnProfile(float d, float r) {
-  float t = clamp(abs(d) / r, 0.0, 1.0);
-  float s = t * t;
-  float u = 1.0 - s;
-  return u * u * (1.0 + 1.5 * s);
+float hash21(vec2 p) {
+  p = fract(p * vec2(234.34, 435.35));
+  p += dot(p, p + 34.23);
+  return fract(p.x * p.y);
 }
 
-// 카본 토우 단면: 볼록 dome + 날카로운 에지 컷
-float carbonProfile(float d, float r) {
-  float t = clamp(abs(d) / r, 0.0, 1.0);
-  float dome = 1.0 - 0.3 * t * t;          // 중앙 볼록 (30% 높이 차)
-  float edge = smoothstep(1.0, 0.75, t);    // 75%부터 급격 드롭
-  return dome * edge;
+float yarnCrossProfile(
+  float d,
+  float halfWidth,
+  float edgeDefinition,
+  float flattening,
+  float widthScale,
+  float carbonFactor
+) {
+  float width = max(halfWidth * widthScale, 0.035);
+  float t = clamp(abs(d) / width, 0.0, 1.0);
+  float bodyPower = mix(
+    mix(2.4, 6.1, edgeDefinition),
+    mix(4.2, 8.0, edgeDefinition),
+    carbonFactor
+  );
+  float shoulderPower = mix(
+    mix(1.55, 0.82, edgeDefinition),
+    mix(1.18, 0.68, edgeDefinition),
+    carbonFactor
+  );
+  float body = pow(max(1.0 - pow(t, bodyPower), 0.0), shoulderPower);
+  float crownBias = saturate(edgeDefinition * 0.7 + flattening * 0.35);
+  float crown = 1.0 - mix(0.08, 0.18, crownBias) * pow(t, mix(2.0, 4.5, edgeDefinition));
+  float topFlatten = mix(1.0, mix(0.93, 0.99, smoothstep(0.0, 0.45, t)), flattening);
+  return max(body * crown * topFlatten, 0.0);
+}
+
+int countConsecutive(vec2 cellIdx, vec2 dir, float targetState) {
+  int count = 0;
+  for (int i = 1; i <= 4; i++) {
+    float state = sampleWeave(cellIdx + dir * float(i));
+    if (abs(state - targetState) > 0.5) {
+      break;
+    }
+    count++;
+  }
+  return count;
+}
+
+vec3 floatSpanInfo(vec2 cellIdx, float coord, vec2 dir, float targetState) {
+  int prevCount = countConsecutive(cellIdx, -dir, targetState);
+  int nextCount = countConsecutive(cellIdx, dir, targetState);
+  float span = float(prevCount + 1 + nextCount);
+  return vec3(float(prevCount) + coord, span, smoothstep(1.0, 4.0, span));
+}
+
+float floatLoftFromInfo(
+  vec3 info,
+  float loft,
+  float edgeDefinition,
+  float carbonFactor
+) {
+  float span = info.y;
+  float spanFactor = info.z;
+  float t = clamp(info.x / max(span, 1.0), 0.0, 1.0);
+  float edgePower = mix(
+    mix(1.9, 3.5, edgeDefinition),
+    mix(3.2, 5.0, edgeDefinition),
+    carbonFactor
+  );
+  float endMask = pow(abs(t - 0.5) * 2.0, edgePower);
+  float edgeDip = mix(0.16, 0.30, loft) * mix(1.0, 0.72, spanFactor);
+  float centerLift = mix(0.0, 0.08, loft) * mix(1.0, 0.62, spanFactor);
+  return 1.0 - edgeDip * endMask + centerLift * (1.0 - endMask);
+}
+
+float fiberDetail(float phase, float mask, float carbonFactor) {
+  float coarseFreq = mix(34.0, 54.0, carbonFactor);
+  float mediumFreq = mix(58.0, 88.0, carbonFactor);
+  float fineFreq = mix(96.0, 132.0, carbonFactor);
+  float detail = sin(phase * coarseFreq)
+    + 0.5 * sin(phase * mediumFreq + 1.8)
+    + 0.22 * sin(phase * fineFreq + 4.1);
+  float amplitude = mix(0.009, 0.013, carbonFactor);
+  return detail * amplitude * mask;
+}
+
+float carbonPerimeterLift(float d, float halfWidth, float edgeDefinition, float loft) {
+  float width = max(halfWidth, 0.035);
+  float t = clamp(abs(d) / width, 0.0, 1.0);
+  float shoulder = smoothstep(0.24, 0.70, t) * (1.0 - smoothstep(0.76, 1.02, t));
+  float amplitude = mix(0.006, 0.015, loft) * mix(0.9, 1.15, edgeDefinition);
+  return 1.0 + shoulder * amplitude;
+}
+
+float carbonLine(float alongCoord, float freq, float halfWidth, float offset) {
+  float x = alongCoord * freq + offset;
+  float d = abs(fract(x) - 0.5);
+  float aa = max(fwidth(x) * 0.7, 0.0015);
+  return 1.0 - smoothstep(halfWidth, halfWidth + aa, d);
+}
+
+float carbonFiberDetail(float alongPhase, float acrossCoord, float visibleMask, float gapWidth) {
+  float across = pow(clamp(1.0 - abs(acrossCoord) * (2.2 + gapWidth * 1.4), 0.0, 1.0), 1.45);
+  float primary = carbonLine(alongPhase, 22.0, 0.09, 0.0);
+  float secondary = carbonLine(alongPhase, 31.0, 0.052, 0.37);
+  float tertiary = carbonLine(alongPhase, 15.0, 0.11, 0.19);
+  float strand = clamp(primary * 0.92 + secondary * 0.44 + tertiary * 0.22, 0.0, 1.0);
+  float rounded = pow(strand, 1.22) * (0.84 + 0.16 * primary);
+  return rounded * 0.017 * visibleMask * across;
 }
 
 void main() {
-  // density를 매트릭스 크기의 배수로 스냅
   float density = max(u_matrixSize.x, round(u_density / u_matrixSize.x) * u_matrixSize.x);
   vec2 tiledUV = v_uv * density;
-  float halfR = u_yarnThickness * 0.7;
   float rawShear = sin(u_twistAngle);
   float shear = round(rawShear * density / u_matrixSize.x) * u_matrixSize.x / density;
+  float carbonFactor = u_patternType >= 3 ? 1.0 : 0.0;
 
   vec2 sh = vec2(
     tiledUV.x + tiledUV.y * shear,
@@ -50,105 +148,139 @@ void main() {
   vec2 dist = f - 0.5;
 
   float hardOver = sampleWeave(cellIdx);
-  bool isCarbon = u_patternType >= 3;
-
-  // ── 이웃 셀 샘플링 ──
   vec2 nDir = mix(vec2(-1.0), vec2(1.0), step(0.5, f));
   float nOverX = sampleWeave(cellIdx + vec2(nDir.x, 0.0));
   float nOverY = sampleWeave(cellIdx + vec2(0.0, nDir.y));
 
-  // ── 셀 경계 AA ──
   vec2 dBnd = min(f, 1.0 - f);
   float fw = max(fwidth(sh.x), fwidth(sh.y));
-  float aaEdge = isCarbon ? 3.0 : 5.0;
-  float aaX = mix(1.0, smoothstep(0.0, fw * aaEdge, dBnd.x), abs(hardOver - nOverX));
-  float aaY = mix(1.0, smoothstep(0.0, fw * aaEdge, dBnd.y), abs(hardOver - nOverY));
+  float aaWidth = mix(4.8, 2.8, carbonFactor);
+  float aaX = mix(1.0, smoothstep(0.0, fw * aaWidth, dBnd.x), abs(hardOver - nOverX));
+  float aaY = mix(1.0, smoothstep(0.0, fw * aaWidth, dBnd.y), abs(hardOver - nOverY));
   float overFactor = mix(0.5, hardOver, min(aaX, aaY));
 
-  // ── 원사/토우 프로파일 ──
-  float warpP, weftP;
-  if (isCarbon) {
-    warpP = carbonProfile(dist.x, halfR);
-    weftP = carbonProfile(dist.y, halfR);
-  } else {
-    // 교차점 짓눌림: 수직 원사 근접 시 반경 축소
-    vec2 prox = vec2(
-      smoothstep(halfR, 0.0, abs(dist.y)),
-      smoothstep(halfR, 0.0, abs(dist.x))
-    );
-    vec2 r = halfR * (1.0 - 0.04 * prox);
-    warpP = yarnProfile(dist.x, r.x);
-    weftP = yarnProfile(dist.y, r.y);
+  vec2 cellMod = mod(cellIdx, u_matrixSize);
+  float warpJitter = hash21(vec2(cellMod.x + 1.7, 8.1)) - 0.5;
+  float weftJitter = hash21(vec2(9.3, cellMod.y + 2.4)) - 0.5;
+
+  float warpPhase = sh.y + cellMod.x * 0.71 + warpJitter * 0.3;
+  float weftPhase = sh.x + cellMod.y * 0.71 + weftJitter * 0.3;
+
+  float wobbleAmp = mix(0.010, 0.005, carbonFactor);
+  float warpEdgeWobble = (
+    sin(warpPhase * 17.0 + warpJitter * 6.283)
+    + 0.6 * sin(warpPhase * 31.0 + 1.7)
+  ) * wobbleAmp;
+  float weftEdgeWobble = (
+    sin(weftPhase * 17.0 + weftJitter * 6.283)
+    + 0.6 * sin(weftPhase * 31.0 + 2.3)
+  ) * wobbleAmp;
+  vec2 organicDist = dist + vec2(warpEdgeWobble, weftEdgeWobble);
+
+  float halfWidth = u_yarnThickness * mix(0.66, 0.74, carbonFactor);
+  if (carbonFactor > 0.5) {
+    halfWidth *= 1.0 - u_gapWidth * 0.85;
   }
 
-  float h;
+  float effectiveEdge = saturate(mix(u_edgeDefinition, u_edgeDefinition * 0.82 + 0.18, carbonFactor));
+  float effectiveLoft = saturate(mix(u_yarnLoft, u_yarnLoft * 0.88 + 0.08, carbonFactor));
 
-  if (isCarbon) {
-    // ════════════════════════════════════════
-    // 카본: 볼록 dome + 날카로운 에지 + 미세 결
-    // ════════════════════════════════════════
-    float topH = 0.80;
-    float botH = 0.18;
+  float warpWidthScale = 1.0 + warpJitter * mix(0.10, 0.05, carbonFactor);
+  float weftWidthScale = 1.0 + weftJitter * mix(0.10, 0.05, carbonFactor);
 
-    // warp-over / weft-over
-    float hWarpOver = topH * warpP + botH * weftP * (1.0 - warpP);
-    float hWeftOver = topH * weftP + botH * warpP * (1.0 - weftP);
-    h = mix(hWeftOver, hWarpOver, overFactor);
+  float warpCross = yarnCrossProfile(
+    organicDist.x,
+    halfWidth,
+    effectiveEdge,
+    u_flattening,
+    warpWidthScale,
+    carbonFactor
+  );
+  float weftCross = yarnCrossProfile(
+    organicDist.y,
+    halfWidth,
+    effectiveEdge,
+    u_flattening,
+    weftWidthScale,
+    carbonFactor
+  );
 
-    // 카본 섬유 결: 토우 방향 미세 grain (타일링 안전)
-    vec2 mc = mod(cellIdx, u_matrixSize);
-    float warpGrain = sin(f.y * 50.0 + mc.y * 2.91) * 0.012 * warpP;
-    float weftGrain = sin(f.x * 50.0 + mc.x * 2.91) * 0.012 * weftP;
-    h += mix(weftGrain, warpGrain, overFactor);
+  vec3 warpInfo = floatSpanInfo(cellIdx, f.y, vec2(0.0, 1.0), 1.0);
+  vec3 weftInfo = floatSpanInfo(cellIdx, f.x, vec2(1.0, 0.0), 0.0);
+  float warpSpanFactor = warpInfo.z;
+  float weftSpanFactor = weftInfo.z;
+  float warpLongTop = floatLoftFromInfo(warpInfo, effectiveLoft, effectiveEdge, carbonFactor);
+  float weftLongTop = floatLoftFromInfo(weftInfo, effectiveLoft, effectiveEdge, carbonFactor);
+  float warpLongUnder = mix(1.0, warpLongTop, 0.18);
+  float weftLongUnder = mix(1.0, weftLongTop, 0.18);
 
-    // 토우 사이 날카로운 갭
-    float coverage = max(warpP, weftP);
-    h *= smoothstep(0.0, 0.05, coverage);
+  float warpTopShape = warpCross * warpLongTop;
+  float weftTopShape = weftCross * weftLongTop;
+  float warpUnderShape = warpCross * warpLongUnder;
+  float weftUnderShape = weftCross * weftLongUnder;
 
-  } else {
-    // ════════════════════════════════════════
-    // 패브릭: 넓은 blend로 자연스러운 전환
-    // ════════════════════════════════════════
+  if (carbonFactor > 0.5) {
+    warpTopShape *= carbonPerimeterLift(organicDist.x, halfWidth * warpWidthScale, effectiveEdge, effectiveLoft);
+    weftTopShape *= carbonPerimeterLift(organicDist.y, halfWidth * weftWidthScale, effectiveEdge, effectiveLoft);
+  }
 
-    // ── 섬유 줄무늬 ──
-    float twC = cos(u_twistAngle);
-    float twS = sin(u_twistAngle);
-    vec2 mc = mod(cellIdx, u_matrixSize);
-    float warpPhase = f.x * twS + f.y * twC + mc.x * 1.37 + mc.y * 0.73;
-    float weftPhase = f.x * twC + f.y * twS + mc.x * 0.73 + mc.y * 1.37;
-    float warpS = (sin(warpPhase * 40.0) + sin(warpPhase * 27.0 + 1.7) * 0.5) * 0.007 * warpP;
-    float weftS = (sin(weftPhase * 40.0) + sin(weftPhase * 27.0 + 2.3) * 0.5) * 0.007 * weftP;
+  float crossing = saturate(warpCross * weftCross);
 
-    float crossing = warpP * weftP;
-    float flatten = 1.0 - u_flattening * crossing;
+  float topLevel = mix(
+    mix(0.72, 0.90, effectiveLoft),
+    mix(0.68, 0.76, effectiveLoft),
+    carbonFactor
+  );
+  float bottomLevel = mix(
+    mix(0.14, 0.24, 1.0 - u_flattening),
+    mix(0.07, 0.16, 1.0 - u_flattening),
+    carbonFactor
+  );
+  float overCompression = 1.0 - mix(0.12, 0.34, carbonFactor) * u_flattening * crossing;
+  float underCompression = 1.0 - mix(0.30, 0.60, carbonFactor) * u_flattening * crossing;
 
-    // ── 종방향 아치: 미세 dome ──
-    float warpTransY = abs(hardOver - nOverY);
-    float warpArch = mix(mix(0.99, 0.93, warpTransY), 1.02, smoothstep(0.0, 0.5, dBnd.y));
-    float weftTransX = abs(hardOver - nOverX);
-    float weftArch = mix(mix(0.99, 0.93, weftTransX), 1.02, smoothstep(0.0, 0.5, dBnd.x));
+  float warpReveal = 1.0 - smoothstep(0.16, 0.88, warpTopShape);
+  float weftReveal = 1.0 - smoothstep(0.16, 0.88, weftTopShape);
 
-    // ── 상부/하부 기본 높이 ──
-    float topBase = mix(0.55, 0.90, crossing);
-    float botBase = mix(0.25, 0.08, crossing);
+  float warpUnderImprint = mix(1.0, 0.42, warpSpanFactor);
+  float weftUnderImprint = mix(1.0, 0.42, weftSpanFactor);
+  float hWarpOver = topLevel * warpTopShape * overCompression
+    + bottomLevel * weftUnderShape * underCompression * warpReveal * warpUnderImprint;
+  float hWeftOver = topLevel * weftTopShape * overCompression
+    + bottomLevel * warpUnderShape * underCompression * weftReveal * weftUnderImprint;
+  float h = mix(hWeftOver, hWarpOver, overFactor);
 
-    // ── warp-over / weft-over 높이 (넓은 blend=0.40으로 lip 최소화) ──
-    float hw = mix(
-      botBase * weftP + weftS,
-      topBase * warpP * flatten * warpArch + warpS,
-      smoothstep(0.0, 0.40, warpP)
-    );
-    float hf = mix(
-      botBase * warpP + warpS,
-      topBase * weftP * flatten * weftArch + weftS,
-      smoothstep(0.0, 0.40, weftP)
-    );
+  float topSpanFactor = mix(weftSpanFactor, warpSpanFactor, overFactor);
+  float saddle = crossing * u_flattening * mix(0.08, 0.12, carbonFactor) * mix(1.0, 0.58, topSpanFactor);
+  h -= saddle;
+  if (carbonFactor > 0.5) {
+    h = mix(h, smoothstep(0.0, 1.0, h), 0.18);
+  }
 
-    h = mix(hf, hw, overFactor);
+  float warpVisibleShape = mix(warpUnderShape, warpTopShape, overFactor);
+  float weftVisibleShape = mix(weftTopShape, weftUnderShape, overFactor);
+  float warpMask = pow(saturate(warpVisibleShape), 0.85) * mix(0.32, 1.0, overFactor);
+  float weftMask = pow(saturate(weftVisibleShape), 0.85) * mix(1.0, 0.32, overFactor);
+  float warpFiber = fiberDetail(warpPhase, warpMask, carbonFactor);
+  float weftFiber = fiberDetail(weftPhase, weftMask, carbonFactor);
 
-    // ── Gap mask ──
-    float coverage = max(warpP, weftP);
-    h *= smoothstep(0.0, 0.12, coverage);
+  if (carbonFactor > 0.5) {
+    float topMask = mix(weftTopShape, warpTopShape, overFactor);
+    float topPhase = mix(weftPhase, warpPhase, overFactor);
+    float topAcross = mix(organicDist.y, organicDist.x, overFactor);
+    float dominantFiber = carbonFiberDetail(topPhase, topAcross, pow(saturate(topMask), 0.9), u_gapWidth);
+    warpFiber = mix(warpFiber * 0.12, dominantFiber, smoothstep(0.55, 0.95, overFactor));
+    weftFiber = mix(weftFiber * 0.12, dominantFiber, 1.0 - smoothstep(0.05, 0.45, overFactor));
+  }
+
+  h += warpFiber + weftFiber;
+
+  float coverage = max(max(warpTopShape, weftTopShape), max(warpUnderShape, weftUnderShape));
+  float gapThreshold = mix(0.09, 0.035 + u_gapWidth * 0.9, carbonFactor);
+  h *= smoothstep(0.0, gapThreshold, coverage);
+  if (carbonFactor > 0.5) {
+    float resinGap = (1.0 - smoothstep(0.06, 0.34 + u_gapWidth * 0.35, coverage)) * (0.05 + u_gapWidth * 0.26);
+    h -= resinGap;
   }
 
   fragColor = vec4(vec3(clamp(h, 0.0, 1.0)), 1.0);

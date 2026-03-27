@@ -144,6 +144,8 @@ export class PatternEngine {
     const density = params.density;
     const yarnThickness = params.yarnThickness;
     const flattening = params.flattening;
+    const edgeDefinition = params.edgeDefinition;
+    const yarnLoft = params.yarnLoft;
     const typeInt = patternTypeToInt(params.type);
     const texelSize: [number, number] = [1.0 / this.currentSize, 1.0 / this.currentSize];
 
@@ -158,6 +160,9 @@ export class PatternEngine {
     this.heightShader.setUniform('u_density', density);
     this.heightShader.setUniform('u_yarnThickness', yarnThickness);
     this.heightShader.setUniform('u_flattening', flattening);
+    this.heightShader.setUniform('u_edgeDefinition', edgeDefinition);
+    this.heightShader.setUniform('u_yarnLoft', yarnLoft);
+    this.heightShader.setUniform('u_gapWidth', 'gapWidth' in params ? params.gapWidth : 0);
 
     this.heightShader.setUniformInt('u_patternType', typeInt);
 
@@ -183,7 +188,6 @@ export class PatternEngine {
     this.normalShader.setUniform('u_heightMap', heightTex);
     this.normalShader.setUniform('u_texelSize', texelSize);
     this.normalShader.setUniform('u_strength', pbrSettings.normalStrength);
-    this.normalShader.setUniformInt('u_filter', pbrSettings.normalFilter === 'scharr' ? 1 : 0);
     this.normalShader.setUniformInt('u_patternType', typeInt);
 
     quad.draw();
@@ -217,9 +221,14 @@ export class PatternEngine {
     this.roughnessShader.setUniform('u_matrixSize', [weaveResult.width, weaveResult.height]);
     this.roughnessShader.setUniform('u_density', density);
     this.roughnessShader.setUniform('u_yarnThickness', yarnThickness);
+    this.roughnessShader.setUniform('u_flattening', flattening);
+    this.roughnessShader.setUniform('u_edgeDefinition', edgeDefinition);
+    this.roughnessShader.setUniform('u_yarnLoft', yarnLoft);
+    this.roughnessShader.setUniform('u_gapWidth', 'gapWidth' in params ? params.gapWidth : 0);
     this.roughnessShader.setUniform('u_roughnessBase', pbrSettings.roughnessBase);
     this.roughnessShader.setUniform('u_roughnessVariation', pbrSettings.roughnessVariation);
     this.roughnessShader.setUniform('u_cavityInfluence', pbrSettings.roughnessCavityInfluence);
+    this.roughnessShader.setUniform('u_glossiness', 'glossiness' in params ? params.glossiness : 0);
     this.roughnessShader.setUniformInt('u_patternType', typeInt);
 
     if (params.type === 'plainWeave' || params.type === 'twillWeave' || params.type === 'satinWeave') {
@@ -242,7 +251,12 @@ export class PatternEngine {
     this.diffuseShader.setUniform('u_matrixSize', [weaveResult.width, weaveResult.height]);
     this.diffuseShader.setUniform('u_density', density);
     this.diffuseShader.setUniform('u_heightMap', heightTex);
+    this.diffuseShader.setUniform('u_aoMap', this.aoTarget.getTexture());
+    this.diffuseShader.setUniform('u_texelSize', texelSize);
     this.diffuseShader.setUniform('u_yarnThickness', yarnThickness);
+    this.diffuseShader.setUniform('u_edgeDefinition', edgeDefinition);
+    this.diffuseShader.setUniform('u_yarnLoft', yarnLoft);
+    this.diffuseShader.setUniform('u_gapWidth', 'gapWidth' in params ? params.gapWidth : 0);
     this.diffuseShader.setUniformInt('u_patternType', typeInt);
 
     if (params.type === 'plainWeave' || params.type === 'twillWeave' || params.type === 'satinWeave') {
@@ -280,7 +294,12 @@ export class PatternEngine {
     this.diffuseShader.setUniform('u_matrixSize', [this.lastMatrixWidth, this.lastMatrixHeight]);
     this.diffuseShader.setUniform('u_density', params.density);
     this.diffuseShader.setUniform('u_heightMap', heightTex);
+    this.diffuseShader.setUniform('u_aoMap', this.aoTarget.getTexture());
+    this.diffuseShader.setUniform('u_texelSize', [1.0 / this.currentSize, 1.0 / this.currentSize]);
     this.diffuseShader.setUniform('u_yarnThickness', params.yarnThickness);
+    this.diffuseShader.setUniform('u_edgeDefinition', params.edgeDefinition);
+    this.diffuseShader.setUniform('u_yarnLoft', params.yarnLoft);
+    this.diffuseShader.setUniform('u_gapWidth', 'gapWidth' in params ? params.gapWidth : 0);
     this.diffuseShader.setUniformInt('u_patternType', patternTypeToInt(params.type));
 
     if (params.type === 'plainWeave' || params.type === 'twillWeave' || params.type === 'satinWeave') {
@@ -308,6 +327,8 @@ export class PatternEngine {
     if (prev.density !== next.density) return false;
     if (prev.yarnThickness !== next.yarnThickness) return false;
     if (prev.flattening !== next.flattening) return false;
+    if (prev.edgeDefinition !== next.edgeDefinition) return false;
+    if (prev.yarnLoft !== next.yarnLoft) return false;
 
     if ('twistAngle' in prev && 'twistAngle' in next) {
       if (prev.twistAngle !== next.twistAngle) return false;
@@ -327,7 +348,6 @@ export class PatternEngine {
   /** PBR 설정 동일 여부 */
   private static pbrSettingsEqual(a: PBRSettings, b: PBRSettings): boolean {
     return a.normalStrength === b.normalStrength
-      && a.normalFilter === b.normalFilter
       && a.aoRadius === b.aoRadius
       && a.aoIntensity === b.aoIntensity
       && a.roughnessBase === b.roughnessBase

@@ -195,6 +195,22 @@ export default function ParamControlPanel() {
           step={0.01}
           onChange={(v) => updateParams({ flattening: v })}
         />
+        <SliderRow
+          label="Edge Definition"
+          value={params.edgeDefinition}
+          min={0}
+          max={1}
+          step={0.01}
+          onChange={(v) => updateParams({ edgeDefinition: v })}
+        />
+        <SliderRow
+          label="Yarn Loft"
+          value={params.yarnLoft}
+          min={0}
+          max={1}
+          step={0.01}
+          onChange={(v) => updateParams({ yarnLoft: v })}
+        />
       </div>
 
       {/* ── Weave 전용 ── */}
@@ -325,24 +341,6 @@ export default function ParamControlPanel() {
             step={0.1}
             onChange={(v) => updatePBRSettings({ normalStrength: v })}
           />
-          <div className="space-y-2.5">
-            <Label className="text-zinc-400">Normal Filter</Label>
-            <ToggleGroup
-              type="single"
-              value={pbrSettings.normalFilter}
-              onValueChange={(v) => {
-                if (v) updatePBRSettings({ normalFilter: v as 'sobel' | 'scharr' });
-              }}
-              className="flex"
-            >
-              <ToggleGroupItem value="sobel" size="sm" variant="outline" className="text-xs h-7 px-3 rounded-r-none">
-                Sobel
-              </ToggleGroupItem>
-              <ToggleGroupItem value="scharr" size="sm" variant="outline" className="text-xs h-7 px-3 rounded-l-none border-l-0">
-                Scharr
-              </ToggleGroupItem>
-            </ToggleGroup>
-          </div>
           <SliderRow
             label="AO Radius"
             value={pbrSettings.aoRadius}
