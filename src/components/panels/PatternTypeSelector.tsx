@@ -28,7 +28,7 @@ export default function PatternTypeSelector() {
     <div className="space-y-4">
       {CATEGORIES.map((cat) => (
         <div key={cat.label} className="space-y-2.5">
-          <span className="text-xs text-zinc-500 uppercase tracking-wider">
+          <span className="text-xs text-zinc-400">
             {cat.label}
           </span>
           <ToggleGroup
@@ -37,7 +37,7 @@ export default function PatternTypeSelector() {
             onValueChange={(v) => {
               if (v) setPatternType(v as PatternType);
             }}
-            className="flex flex-wrap"
+            className="flex"
           >
             {cat.items.map((item, i) => (
               <ToggleGroupItem
@@ -45,7 +45,7 @@ export default function PatternTypeSelector() {
                 value={item.value}
                 size="sm"
                 variant="outline"
-                className={`text-xs px-2.5 py-1 h-7 ${
+                className={`text-xs h-7 px-3 ${
                   i === 0
                     ? 'rounded-r-none'
                     : i === cat.items.length - 1

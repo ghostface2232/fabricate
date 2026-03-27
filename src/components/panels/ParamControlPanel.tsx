@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { usePatternStore } from '@/stores/patternStore';
+import { ColorField } from '@/components/ui/color-field';
 import { Slider } from '@/components/ui/slider';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
@@ -12,7 +13,6 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { ChevronDown, ChevronRight } from 'lucide-react';
-import { hexToRgb01, rgb01ToHex } from '@/utils/colorConvert';
 
 function InlineValue({
   value,
@@ -120,30 +120,6 @@ function SliderRow({
   );
 }
 
-function ColorRow({
-  label,
-  value,
-  onChange,
-}: {
-  label: string;
-  value: [number, number, number];
-  onChange: (v: [number, number, number]) => void;
-}) {
-  const hex = rgb01ToHex(value);
-  return (
-    <div className="flex items-center gap-3">
-      <Label className="text-xs text-zinc-400 w-20 shrink-0">{label}</Label>
-      <input
-        type="color"
-        value={hex}
-        onChange={(e) => onChange(hexToRgb01(e.target.value))}
-        className="w-7 h-7 rounded border border-zinc-700 bg-transparent cursor-pointer p-0"
-      />
-      <span className="text-xs text-zinc-500 font-mono tabular-nums">{hex}</span>
-    </div>
-  );
-}
-
 export default function ParamControlPanel() {
   const params = usePatternStore((s) => s.params);
   const pbrSettings = usePatternStore((s) => s.pbrSettings);
@@ -157,29 +133,29 @@ export default function ParamControlPanel() {
     params.type === 'satinWeave';
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       {/* ── 색상 ── */}
       {isWeave ? (
-        <div className="space-y-3">
-          <ColorRow
+        <div className="space-y-4">
+          <ColorField
             label="Warp Color"
             value={params.warpColor}
             onChange={(v) => updateParams({ warpColor: v })}
           />
-          <ColorRow
+          <ColorField
             label="Weft Color"
             value={params.weftColor}
             onChange={(v) => updateParams({ weftColor: v })}
           />
         </div>
       ) : (
-        <div className="space-y-3">
-          <ColorRow
+        <div className="space-y-4">
+          <ColorField
             label="Fiber Color"
             value={params.fiberColor}
             onChange={(v) => updateParams({ fiberColor: v })}
           />
-          <ColorRow
+          <ColorField
             label="Resin Color"
             value={params.resinColor}
             onChange={(v) => updateParams({ resinColor: v })}
@@ -190,7 +166,7 @@ export default function ParamControlPanel() {
       <Separator className="bg-zinc-800" />
 
       {/* ── 공통 파라미터 ── */}
-      <div className="space-y-4">
+      <div className="space-y-5">
         <SliderRow
           label="Density"
           value={params.density}
@@ -221,7 +197,7 @@ export default function ParamControlPanel() {
       {isWeave && (
         <>
           <Separator className="bg-zinc-800" />
-          <div className="space-y-4">
+          <div className="space-y-5">
             <SliderRow
               label="Twist Angle"
               value={params.twistAngle}
@@ -271,7 +247,7 @@ export default function ParamControlPanel() {
       {params.type === 'satinWeave' && (
         <>
           <Separator className="bg-zinc-800" />
-          <div className="space-y-4">
+          <div className="space-y-5">
             <SliderRow
               label="Repeat Size"
               value={params.repeatSize}
@@ -296,7 +272,7 @@ export default function ParamControlPanel() {
       {!isWeave && (
         <>
           <Separator className="bg-zinc-800" />
-          <div className="space-y-4">
+          <div className="space-y-5">
             <div className="space-y-2.5">
               <Label className="text-xs text-zinc-400">Tow Size</Label>
               <Select
@@ -344,7 +320,7 @@ export default function ParamControlPanel() {
       </button>
 
       {pbrOpen && (
-        <div className="space-y-4">
+        <div className="space-y-5">
           <SliderRow
             label="Normal Strength"
             value={pbrSettings.normalStrength}

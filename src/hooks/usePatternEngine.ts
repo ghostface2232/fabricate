@@ -27,7 +27,7 @@ export function usePatternEngine() {
   }, []);
 
   // params/pbrSettings 변경 시 setTimeout으로 렌더링 (로딩 UI 표시 시간 확보)
-  const renderRef = useRef<() => void>();
+  const renderRef = useRef<(() => void) | null>(null);
   renderRef.current = useCallback(() => {
     const engine = engineRef.current;
     if (!engine) return;

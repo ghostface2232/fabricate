@@ -54,14 +54,14 @@ function Thumbnail({
   }, [pixels]);
 
   return (
-    <button onClick={onClick} className="w-full flex flex-col min-h-0">
-      <span className="text-xs text-zinc-500 mb-1 shrink-0">{label}</span>
+    <button onClick={onClick} className="w-full flex flex-col gap-1.5 min-h-0 rounded-xl p-1 transition-colors hover:bg-zinc-900/60">
+      <span className="shrink-0 text-[11px] uppercase tracking-[0.18em] text-zinc-500">{label}</span>
       <canvas
         ref={canvasRef}
         width={THUMB_SIZE}
         height={THUMB_SIZE}
         className={`w-full flex-1 min-h-0 object-contain rounded border ${
-          selected ? 'border-zinc-400' : 'border-zinc-800'
+          selected ? 'border-zinc-500 ring-1 ring-zinc-700' : 'border-zinc-800'
         } bg-zinc-900`}
       />
     </button>
@@ -80,7 +80,7 @@ export default function PBRThumbnailPanel({
   allMapPixels,
 }: PBRThumbnailPanelProps) {
   return (
-    <div className="h-full flex flex-col gap-2">
+    <div className="h-full flex flex-col gap-3">
       {MAPS.map(({ type, label }) => (
         <Thumbnail
           key={type}

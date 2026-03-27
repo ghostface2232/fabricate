@@ -75,7 +75,7 @@ export default function AppLayout({
         {/* Left Panel */}
         <div className="w-[300px] shrink-0 border-r border-zinc-800 bg-zinc-900/60">
           <ScrollArea className="h-full">
-            <div className="p-4 space-y-6">
+            <div className="p-5 space-y-7">
               <PatternTypeSelector />
               <div className="border-t border-zinc-800" />
               <ParamControlPanel />
@@ -101,7 +101,7 @@ export default function AppLayout({
 
         {/* Right Panel — 폭을 뷰포트 높이 기반으로 계산해서 정사각형 썸네일 5개 딱 맞춤 */}
         <div
-          className="shrink-0 border-l border-zinc-800 bg-zinc-900/60 p-3 flex flex-col min-h-0"
+          className="shrink-0 border-l border-zinc-800 bg-zinc-900/60 p-4 flex flex-col min-h-0"
           style={{ width: 'calc((100vh - 48px - 24px - 5 * 18px - 4 * 8px) / 5 + 24px)' }}
         >
           <PBRThumbnailPanel
