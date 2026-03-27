@@ -1,10 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 import { Grid2x2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { usePatternStore } from '@/stores/patternStore';
+import { useHistoryStore } from '@/stores/historyStore';
 import TilePreview2D from './TilePreview2D';
 import SpherePreview3D from './SpherePreview3D';
 import type { PatternEngine } from '@/engine/PatternEngine';
 import type { PBRMapType } from '@/types/pattern';
+
+const RESOLUTION_OPTIONS = [512, 1024, 2048] as const;
 
 const PREVIEW_TABS = [
   { value: '2d', label: '2D' },
@@ -26,6 +30,11 @@ interface PreviewContainerProps {
 }
 
 export default function PreviewContainer({ engine, renderVersion, lastColorOnly }: PreviewContainerProps) {
+  const commit = useHistoryStore((s) => s.commit);
+  const previewResolution = usePatternStore((s) => s.previewResolution);
+  const _setRes = usePatternStore((s) => s.setPreviewResolution);
+  const setPreviewResolution = (r: number) => commit(() => _setRes(r));
+
   const [previewTab, setPreviewTab] = useState('2d');
   const [selectedMap, setSelectedMap] = useState<PBRMapType>('diffuse');
   const [tiling, setTiling] = useState(true);
@@ -115,6 +124,24 @@ export default function PreviewContainer({ engine, renderVersion, lastColorOnly 
             <Grid2x2 className="w-3.5 h-3.5" />
           </button>
         )}
+
+        {/* 프리뷰 해상도 */}
+        <div className="inline-flex h-7 items-center rounded-lg bg-zinc-800/50 p-0.5">
+          {RESOLUTION_OPTIONS.map((r) => (
+            <button
+              key={r}
+              onClick={() => setPreviewResolution(r)}
+              className={cn(
+                'px-2 h-6 text-xs font-medium rounded-md transition-colors',
+                previewResolution === r
+                  ? 'bg-zinc-700 text-zinc-100 shadow-sm'
+                  : 'text-zinc-500 hover:text-zinc-300',
+              )}
+            >
+              {r}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* 정사각형 프리뷰 영역 */}

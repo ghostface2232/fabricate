@@ -26,11 +26,13 @@ float yarnProfile(float d, float r) {
 }
 
 void main() {
-  vec2 tiledUV = v_uv * u_density;
+  // density를 매트릭스 크기의 배수로 스냅 → 타일 경계 이음새 제거
+  float density = max(u_matrixSize.x, round(u_density / u_matrixSize.x) * u_matrixSize.x);
+  vec2 tiledUV = v_uv * density;
   float halfR = u_yarnThickness * 0.7;
   // shear 양자화: density * shear를 매트릭스 크기의 배수로 맞춰 타일링 이음새 제거
   float rawShear = sin(u_twistAngle);
-  float shear = round(rawShear * u_density / u_matrixSize.x) * u_matrixSize.x / u_density;
+  float shear = round(rawShear * density / u_matrixSize.x) * u_matrixSize.x / density;
 
   // shear 좌표 → 셀 분율 / 원사 중심 거리
   vec2 sh = vec2(

@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { usePatternStore } from '@/stores/patternStore';
+import { useHistoryStore } from '@/stores/historyStore';
 import { ColorField } from '@/components/ui/color-field';
 import { Slider } from '@/components/ui/slider';
 import { Label } from '@/components/ui/label';
@@ -123,8 +124,11 @@ function SliderRow({
 export default function ParamControlPanel() {
   const params = usePatternStore((s) => s.params);
   const pbrSettings = usePatternStore((s) => s.pbrSettings);
-  const updateParams = usePatternStore((s) => s.updateParams);
-  const updatePBRSettings = usePatternStore((s) => s.updatePBRSettings);
+  const commit = useHistoryStore((s) => s.commit);
+  const _up = usePatternStore((s) => s.updateParams);
+  const _upbr = usePatternStore((s) => s.updatePBRSettings);
+  const updateParams: typeof _up = (p) => commit(() => _up(p));
+  const updatePBRSettings: typeof _upbr = (p) => commit(() => _upbr(p));
   const [pbrOpen, setPbrOpen] = useState(false);
 
   const isWeave =

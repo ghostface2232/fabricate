@@ -75,11 +75,13 @@ function SBPicker({
   saturation,
   brightness,
   onChange,
+  onCommit,
 }: {
   hue: number
   saturation: number
   brightness: number
   onChange: (s: number, b: number) => void
+  onCommit: () => void
 }) {
   const ref = useRef<HTMLDivElement>(null)
   const dragging = useRef(false)
@@ -98,7 +100,7 @@ function SBPicker({
     calc(e)
   }
   const onPointerMove = (e: React.PointerEvent) => { if (dragging.current) calc(e) }
-  const onPointerUp = () => { dragging.current = false }
+  const onPointerUp = () => { dragging.current = false; onCommit() }
 
   return (
     <div
@@ -122,9 +124,11 @@ function SBPicker({
 function HueBar({
   hue,
   onChange,
+  onCommit,
 }: {
   hue: number
   onChange: (h: number) => void
+  onCommit: () => void
 }) {
   const ref = useRef<HTMLDivElement>(null)
   const dragging = useRef(false)
@@ -141,7 +145,7 @@ function HueBar({
     calc(e)
   }
   const onPointerMove = (e: React.PointerEvent) => { if (dragging.current) calc(e) }
-  const onPointerUp = () => { dragging.current = false }
+  const onPointerUp = () => { dragging.current = false; onCommit() }
 
   return (
     <div
@@ -228,16 +232,22 @@ export function ColorField({
 
   // draft 파생 값
   const draftHsb = rgb01ToHsb(draft)
+  const draftRef = useRef<RGB01>(draft)
 
   // 커밋 값 (트리거 버튼에 표시)
   const committedHex = rgb01ToHex(value)
 
-  // draft HSB 변경 → draft 갱신 + 즉시 스토어 반영 (Diffuse-only 렌더링)
+  // draft HSB 변경 → 로컬 draft만 갱신 (피커 시각적 피드백)
   const updateDraftHsb = (newHsb: HSB) => {
     const rgb = hsbToRgb01(newHsb)
     setDraft(rgb)
     setHexDraft(rgb01ToHex(rgb))
-    onChange(rgb)
+    draftRef.current = rgb
+  }
+
+  // pointerUp 시 스토어에 반영
+  const commitDraft = () => {
+    onChange(draftRef.current)
   }
 
   // draft hex 입력 커밋 → draft 갱신 + 즉시 스토어 반영
@@ -302,10 +312,12 @@ export function ColorField({
               saturation={draftHsb[1]}
               brightness={draftHsb[2]}
               onChange={(s, b) => updateDraftHsb([draftHsb[0], s, b])}
+              onCommit={commitDraft}
             />
             <HueBar
               hue={draftHsb[0]}
               onChange={(h) => updateDraftHsb([h, draftHsb[1], draftHsb[2]])}
+              onCommit={commitDraft}
             />
             <HexField
               value={hexDraft}

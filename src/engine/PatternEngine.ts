@@ -77,6 +77,24 @@ export class PatternEngine {
     this.diffuseTarget = new RenderTarget(this.ctx, RENDER_SIZE, RENDER_SIZE);
   }
 
+  /** 프리뷰 렌더 해상도 변경 (영속적) */
+  setRenderSize(size: number): void {
+    if (this.currentSize === size) return;
+    this.ctx.resize(size, size);
+    this.heightTarget.resize(size, size);
+    this.normalTarget.resize(size, size);
+    this.aoTarget.resize(size, size);
+    this.roughnessTarget.resize(size, size);
+    this.diffuseTarget.resize(size, size);
+    this.currentSize = size;
+    this.prevParams = null; // 전체 재렌더 강제
+  }
+
+  /** 현재 렌더 해상도 */
+  getRenderSize(): number {
+    return this.currentSize;
+  }
+
   /** 마지막 generate()가 컬러 전용(Diffuse-only)이었는지 */
   lastColorOnly = false;
 
@@ -353,29 +371,14 @@ export class PatternEngine {
 
   /** Export용: 지정 해상도로 모든 맵을 재렌더링한 뒤 복원 */
   renderAtResolution(resolution: number, params: PatternParams, pbrSettings: PBRSettings): void {
-    // 해상도 변경
-    this.ctx.resize(resolution, resolution);
-    this.heightTarget.resize(resolution, resolution);
-    this.normalTarget.resize(resolution, resolution);
-    this.aoTarget.resize(resolution, resolution);
-    this.roughnessTarget.resize(resolution, resolution);
-    this.diffuseTarget.resize(resolution, resolution);
-    this.currentSize = resolution;
+    const restoreSize = this.currentSize;
 
-    // 전체 파이프라인 재렌더링 (해상도 변경이므로 전체 강제)
-    this.prevParams = null;
+    // 지정 해상도로 전체 파이프라인 렌더링
+    this.setRenderSize(resolution);
     this.generate(params, pbrSettings);
 
-    // 기본 해상도 복원 후 프리뷰용 재렌더링
-    this.ctx.resize(RENDER_SIZE, RENDER_SIZE);
-    this.heightTarget.resize(RENDER_SIZE, RENDER_SIZE);
-    this.normalTarget.resize(RENDER_SIZE, RENDER_SIZE);
-    this.aoTarget.resize(RENDER_SIZE, RENDER_SIZE);
-    this.roughnessTarget.resize(RENDER_SIZE, RENDER_SIZE);
-    this.diffuseTarget.resize(RENDER_SIZE, RENDER_SIZE);
-    this.currentSize = RENDER_SIZE;
-
-    this.prevParams = null;
+    // 프리뷰 해상도로 복원 후 재렌더링
+    this.setRenderSize(restoreSize);
     this.generate(params, pbrSettings);
   }
 

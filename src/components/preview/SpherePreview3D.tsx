@@ -4,7 +4,6 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { usePatternStore } from '@/stores/patternStore';
 import type { PatternEngine } from '@/engine/PatternEngine';
 
-const RENDER_SIZE = 512;
 const MAP_NAMES = ['height', 'normal', 'ao', 'roughness', 'diffuse'] as const;
 
 interface SpherePreview3DProps {
@@ -23,6 +22,7 @@ export default function SpherePreview3D({ engine, renderVersion }: SpherePreview
   const texturesRef = useRef<Record<string, THREE.DataTexture>>({});
   const rafRef = useRef(0);
   const prevTypeRef = useRef<string>('');
+  const prevRenderSizeRef = useRef(0);
 
   const params = usePatternStore((s) => s.params);
 
@@ -55,7 +55,7 @@ export default function SpherePreview3D({ engine, renderVersion }: SpherePreview
     scene.add(new THREE.HemisphereLight(0x606080, 0x404040, 0.5));
 
     // Geometry — uv2 for aoMap
-    const geometry = new THREE.SphereGeometry(1, 64, 64);
+    const geometry = new THREE.SphereGeometry(1, 128, 128);
     geometry.setAttribute('uv2', geometry.getAttribute('uv'));
 
     // Material (placeholder, recreated on type change)
@@ -145,6 +145,15 @@ export default function SpherePreview3D({ engine, renderVersion }: SpherePreview
     const mat = materialRef.current;
     if (!mat) return;
 
+    const renderSize = engine.getRenderSize();
+
+    // 해상도 변경 시 기존 텍스처 폐기 → 새로 생성
+    if (renderSize !== prevRenderSizeRef.current) {
+      for (const tex of Object.values(texturesRef.current)) tex.dispose();
+      texturesRef.current = {};
+      prevRenderSizeRef.current = renderSize;
+    }
+
     for (const mapName of MAP_NAMES) {
       const pixels = engine.getMapPixels(mapName);
 
@@ -157,8 +166,8 @@ export default function SpherePreview3D({ engine, renderVersion }: SpherePreview
         // Create new DataTexture
         tex = new THREE.DataTexture(
           pixels,
-          RENDER_SIZE,
-          RENDER_SIZE,
+          renderSize,
+          renderSize,
           THREE.RGBAFormat,
           THREE.UnsignedByteType,
         );
@@ -180,8 +189,15 @@ export default function SpherePreview3D({ engine, renderVersion }: SpherePreview
     mat.aoMap = texs['ao'];
     mat.displacementMap = texs['height'];
     mat.displacementScale = 0.02;
+
+    // Sync carbon glossiness → clearcoatRoughness
+    const isCarbon = params.type === 'carbonPlain' || params.type === 'carbonTwill';
+    if (isCarbon && mat instanceof THREE.MeshPhysicalMaterial) {
+      mat.clearcoatRoughness = 1.0 - (params.glossiness ?? 0.85);
+    }
+
     mat.needsUpdate = true;
-  }, [engine, renderVersion]);
+  }, [engine, renderVersion, params]);
 
   return (
     <div ref={containerRef} className="w-full h-full" />

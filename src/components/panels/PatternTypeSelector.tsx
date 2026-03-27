@@ -1,4 +1,5 @@
 import { usePatternStore } from '@/stores/patternStore';
+import { useHistoryStore } from '@/stores/historyStore';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Label } from '@/components/ui/label';
 import type { PatternType } from '@/types/pattern';
@@ -23,7 +24,9 @@ const CATEGORIES = [
 
 export default function PatternTypeSelector() {
   const patternType = usePatternStore((s) => s.params.type);
-  const setPatternType = usePatternStore((s) => s.setPatternType);
+  const commit = useHistoryStore((s) => s.commit);
+  const _setType = usePatternStore((s) => s.setPatternType);
+  const setPatternType: typeof _setType = (t) => commit(() => _setType(t));
 
   return (
     <div className="space-y-4">

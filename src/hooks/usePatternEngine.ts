@@ -11,12 +11,15 @@ export function usePatternEngine() {
 
   const params = usePatternStore((s) => s.params);
   const pbrSettings = usePatternStore((s) => s.pbrSettings);
+  const previewResolution = usePatternStore((s) => s.previewResolution);
 
   // rAF 콜백에서 최신 값을 참조하기 위한 ref
   const paramsRef = useRef(params);
   const pbrRef = useRef(pbrSettings);
+  const resRef = useRef(previewResolution);
   paramsRef.current = params;
   pbrRef.current = pbrSettings;
+  resRef.current = previewResolution;
 
   // rAF 중복 방지
   const pendingRef = useRef(false);
@@ -52,12 +55,13 @@ export function usePatternEngine() {
         return;
       }
 
+      engine.setRenderSize(resRef.current);
       engine.generate(paramsRef.current, pbrRef.current);
       setLastColorOnly(engine.lastColorOnly);
       setRenderVersion((v) => v + 1);
       setIsRendering(false);
     });
-  }, [params, pbrSettings, isReady]);
+  }, [params, pbrSettings, previewResolution, isReady]);
 
   return {
     engine: engineRef.current,

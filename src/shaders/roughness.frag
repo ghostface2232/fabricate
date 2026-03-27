@@ -37,9 +37,11 @@ void main() {
   }
 
   // ── 원사 방향 계산 ──
-  vec2 tiledUV = v_uv * u_density;
+  // density를 매트릭스 크기의 배수로 스냅 → 타일 경계 이음새 제거
+  float density = max(u_matrixSize.x, round(u_density / u_matrixSize.x) * u_matrixSize.x);
+  vec2 tiledUV = v_uv * density;
   float rawShear = sin(u_twistAngle);
-  float shear = round(rawShear * u_density / u_matrixSize.x) * u_matrixSize.x / u_density;
+  float shear = round(rawShear * density / u_matrixSize.x) * u_matrixSize.x / density;
   vec2 sh = vec2(
     tiledUV.x + tiledUV.y * shear,
     tiledUV.y + tiledUV.x * shear

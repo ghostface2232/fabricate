@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
 import {
@@ -8,8 +8,9 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { usePatternStore } from '@/stores/patternStore';
+import { useHistoryStore } from '@/stores/historyStore';
 import { defaultPresets } from '@/presets/defaultPresets';
-import { Download, ChevronDown } from 'lucide-react';
+import { Download, ChevronDown, Undo2, Redo2 } from 'lucide-react';
 import PatternTypeSelector from '@/components/panels/PatternTypeSelector';
 import ParamControlPanel from '@/components/panels/ParamControlPanel';
 import PreviewContainer from '@/components/preview/PreviewContainer';
@@ -28,8 +29,39 @@ export default function AppLayout({
   lastColorOnly,
   isRendering,
 }: AppLayoutProps) {
-  const loadPreset = usePatternStore((s) => s.loadPreset);
+  const commit = useHistoryStore((s) => s.commit);
+  const undo = useHistoryStore((s) => s.undo);
+  const redo = useHistoryStore((s) => s.redo);
+  const canUndo = useHistoryStore((s) => s.undoStack.length > 0);
+  const canRedo = useHistoryStore((s) => s.redoStack.length > 0);
+
+  const _loadPreset = usePatternStore((s) => s.loadPreset);
+  const loadPreset: typeof _loadPreset = (p) => commit(() => _loadPreset(p));
   const [presetName, setPresetName] = useState('');
+
+  // ── Keyboard shortcuts: Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y ──
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+
+      const ctrl = e.ctrlKey || e.metaKey;
+      const key = e.key.toLowerCase();
+
+      if (ctrl && key === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        useHistoryStore.getState().undo();
+      } else if (ctrl && key === 'z' && e.shiftKey) {
+        e.preventDefault();
+        useHistoryStore.getState().redo();
+      } else if (ctrl && key === 'y') {
+        e.preventDefault();
+        useHistoryStore.getState().redo();
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
 
   return (
     <div className="h-screen flex flex-col bg-zinc-950 text-zinc-300 overflow-hidden">
@@ -39,6 +71,28 @@ export default function AppLayout({
           Fabricate
         </span>
         <div className="flex items-center gap-2">
+          <div className="flex items-center">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 w-7 p-0"
+              disabled={!canUndo}
+              onClick={undo}
+              title="Undo (Ctrl+Z)"
+            >
+              <Undo2 className="w-3.5 h-3.5" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 w-7 p-0"
+              disabled={!canRedo}
+              onClick={redo}
+              title="Redo (Ctrl+Shift+Z)"
+            >
+              <Redo2 className="w-3.5 h-3.5" />
+            </Button>
+          </div>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="sm" className="h-7 text-xs gap-1">

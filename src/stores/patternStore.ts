@@ -104,6 +104,7 @@ interface PatternState {
   params: PatternParams;
   pbrSettings: PBRSettings;
   exportSettings: ExportSettings;
+  previewResolution: number;
 }
 
 interface PatternActions {
@@ -119,6 +120,8 @@ interface PatternActions {
   loadPreset: (preset: Preset) => void;
   /** 현재 상태를 Preset 객체로 직렬화 */
   exportCurrentAsPreset: (name: string) => Preset;
+  /** 프리뷰 렌더 해상도 변경 */
+  setPreviewResolution: (resolution: number) => void;
 }
 
 export type PatternStore = PatternState & PatternActions;
@@ -148,6 +151,7 @@ export const usePatternStore = create<PatternStore>((set, get) => ({
   params: getDefaultParams('twillWeave'),
   pbrSettings: { ...DEFAULT_PBR_SETTINGS },
   exportSettings: { ...DEFAULT_EXPORT_SETTINGS },
+  previewResolution: 512,
 
   setPatternType: (type) => {
     set({ params: getDefaultParams(type) });
@@ -178,6 +182,11 @@ export const usePatternStore = create<PatternStore>((set, get) => ({
       params: { ...preset.params },
       pbrSettings: { ...preset.pbrSettings },
     });
+  },
+
+  setPreviewResolution: (resolution) => {
+    if (get().previewResolution === resolution) return;
+    set({ previewResolution: resolution });
   },
 
   exportCurrentAsPreset: (name) => {
