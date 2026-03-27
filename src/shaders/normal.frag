@@ -45,7 +45,7 @@ void main() {
        +  1.0 * bl + 2.0 * b + 1.0 * br;
   }
 
-  vec3 normal = vec3(-gx * u_strength, -gy * u_strength, 1.0);
+  vec3 normal = vec3(-gx * u_strength, gy * u_strength, 1.0);
   normal.z = max(normal.z, 0.001);
   normal = normalize(normal);
 
