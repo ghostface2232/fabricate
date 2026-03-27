@@ -77,6 +77,9 @@ export class PatternEngine {
     this.diffuseTarget = new RenderTarget(this.ctx, RENDER_SIZE, RENDER_SIZE);
   }
 
+  /** 마지막 generate()가 컬러 전용(Diffuse-only)이었는지 */
+  lastColorOnly = false;
+
   /** 변경 사항에 따라 필요한 패스만 재렌더링 */
   generate(params: PatternParams, pbrSettings: PBRSettings): void {
     const colorOnly = this.prevParams !== null
@@ -90,6 +93,7 @@ export class PatternEngine {
       this.renderFullPipeline(params, pbrSettings);
     }
 
+    this.lastColorOnly = colorOnly;
     this.prevParams = params;
     this.prevPbrSettings = pbrSettings;
   }

@@ -232,19 +232,21 @@ export function ColorField({
   // 커밋 값 (트리거 버튼에 표시)
   const committedHex = rgb01ToHex(value)
 
-  // draft HSB 슬라이더 변경 → draft만 갱신
+  // draft HSB 변경 → draft 갱신 + 즉시 스토어 반영 (Diffuse-only 렌더링)
   const updateDraftHsb = (newHsb: HSB) => {
     const rgb = hsbToRgb01(newHsb)
     setDraft(rgb)
     setHexDraft(rgb01ToHex(rgb))
+    onChange(rgb)
   }
 
-  // draft hex 입력 커밋 → draft만 갱신
+  // draft hex 입력 커밋 → draft 갱신 + 즉시 스토어 반영
   const applyHexToDraft = (nextHex: string) => {
     if (/^#[0-9a-f]{6}$/i.test(nextHex)) {
       const rgb = hexToRgb01(nextHex)
       setDraft(rgb)
       setHexDraft(nextHex)
+      onChange(rgb)
     }
   }
 

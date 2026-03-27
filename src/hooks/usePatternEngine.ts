@@ -7,6 +7,7 @@ export function usePatternEngine() {
   const [renderVersion, setRenderVersion] = useState(0);
   const [isReady, setIsReady] = useState(false);
   const [isRendering, setIsRendering] = useState(false);
+  const [lastColorOnly, setLastColorOnly] = useState(false);
 
   const params = usePatternStore((s) => s.params);
   const pbrSettings = usePatternStore((s) => s.pbrSettings);
@@ -52,6 +53,7 @@ export function usePatternEngine() {
       }
 
       engine.generate(paramsRef.current, pbrRef.current);
+      setLastColorOnly(engine.lastColorOnly);
       setRenderVersion((v) => v + 1);
       setIsRendering(false);
     });
@@ -60,6 +62,7 @@ export function usePatternEngine() {
   return {
     engine: engineRef.current,
     renderVersion,
+    lastColorOnly,
     isReady,
     isRendering,
   };

@@ -33,7 +33,7 @@ export default function SpherePreview3D({ engine, renderVersion }: SpherePreview
 
     // Renderer
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
-    renderer.setClearColor(0x18181b);
+    renderer.setClearColor(0x09090b);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     container.appendChild(renderer.domElement);
     rendererRef.current = renderer;

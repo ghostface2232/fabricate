@@ -12,24 +12,20 @@ import { defaultPresets } from '@/presets/defaultPresets';
 import { Download, ChevronDown } from 'lucide-react';
 import PatternTypeSelector from '@/components/panels/PatternTypeSelector';
 import ParamControlPanel from '@/components/panels/ParamControlPanel';
-import PBRThumbnailPanel from '@/components/panels/PBRThumbnailPanel';
 import PreviewContainer from '@/components/preview/PreviewContainer';
-import type { PBRMapType } from '@/types/pattern';
 import type { PatternEngine } from '@/engine/PatternEngine';
 
 interface AppLayoutProps {
-  selectedMap: PBRMapType;
-  onSelectMap: (map: PBRMapType) => void;
   engine: PatternEngine | null;
   renderVersion: number;
+  lastColorOnly: boolean;
   isRendering: boolean;
 }
 
 export default function AppLayout({
-  selectedMap,
-  onSelectMap,
   engine,
   renderVersion,
+  lastColorOnly,
   isRendering,
 }: AppLayoutProps) {
   const loadPreset = usePatternStore((s) => s.loadPreset);
@@ -72,7 +68,7 @@ export default function AppLayout({
         </div>
       </header>
 
-      {/* ── Body: 3-column ── */}
+      {/* ── Body: 2-column ── */}
       <div className="flex flex-1 min-h-0">
         {/* Left Panel */}
         <div className="w-[300px] shrink-0 border-r border-zinc-800 bg-zinc-900/60">
@@ -87,7 +83,11 @@ export default function AppLayout({
 
         {/* Center Preview */}
         <div className="flex-1 flex items-center justify-center bg-zinc-950 min-w-0 overflow-hidden relative">
-          <PreviewContainer engine={engine} renderVersion={renderVersion} />
+          <PreviewContainer
+            engine={engine}
+            renderVersion={renderVersion}
+            lastColorOnly={lastColorOnly}
+          />
           {isRendering && (
             <div className="absolute inset-0 flex items-center justify-center bg-zinc-950/70 pointer-events-none">
               <div className="flex items-center gap-2 text-sm text-zinc-400">
@@ -99,19 +99,6 @@ export default function AppLayout({
               </div>
             </div>
           )}
-        </div>
-
-        {/* Right Panel */}
-        <div
-          className="shrink-0 border-l border-zinc-800 bg-zinc-900/60 p-4 flex flex-col min-h-0"
-          style={{ width: 'calc((100vh - 48px - 24px - 5 * 18px - 4 * 8px) / 5 + 24px)' }}
-        >
-          <PBRThumbnailPanel
-            selectedMap={selectedMap}
-            onSelectMap={onSelectMap}
-            engine={engine}
-            renderVersion={renderVersion}
-          />
         </div>
       </div>
     </div>
