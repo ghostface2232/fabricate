@@ -21,6 +21,8 @@ uniform int u_patternType;  // 0-2: fabric, 3-4: carbon
 in vec2 v_uv;
 out vec4 fragColor;
 
+const int MAX_FLOAT_SEARCH_STEPS = 24;
+
 float sampleH(vec2 offset) {
   return texture(u_heightMap, mod(v_uv + offset * u_texelSize, 1.0)).r;
 }
@@ -28,6 +30,16 @@ float sampleH(vec2 offset) {
 float sampleWeave(vec2 cellIdx) {
   vec2 uv = (mod(cellIdx, u_matrixSize) + 0.5) / u_matrixSize;
   return step(0.5, texture(u_weaveMatrix, uv).r);
+}
+
+float weaveCellScale() {
+  if (u_patternType == 3) return max(u_matrixSize.x * 0.5, 1.0);
+  if (u_patternType == 4) return max(u_matrixSize.x * 0.25, 1.0);
+  return 1.0;
+}
+
+float sampleWeaveScaled(vec2 cellIdx, float cellScale) {
+  return sampleWeave(floor(cellIdx * cellScale));
 }
 
 float hash21(vec2 p) {
@@ -62,10 +74,18 @@ float yarnCrossProfile(
   return max(body * crown, 0.0);
 }
 
-int countConsecutive(vec2 cellIdx, vec2 dir, float targetState) {
+float carbonCrossSectionProfile(float crossValue) {
+  return clamp(pow(crossValue, 0.72) * 0.88, 0.0, 1.0);
+}
+
+int countConsecutive(vec2 cellIdx, vec2 dir, float targetState, float cellScale) {
   int count = 0;
-  for (int i = 1; i <= 4; i++) {
-    float state = sampleWeave(cellIdx + dir * float(i));
+  float maxSteps = max(u_matrixSize.x, u_matrixSize.y) / cellScale - 1.0;
+  for (int i = 1; i <= MAX_FLOAT_SEARCH_STEPS; i++) {
+    if (float(i) > maxSteps) {
+      break;
+    }
+    float state = sampleWeaveScaled(cellIdx + dir * float(i), cellScale);
     if (abs(state - targetState) > 0.5) {
       break;
     }
@@ -74,11 +94,30 @@ int countConsecutive(vec2 cellIdx, vec2 dir, float targetState) {
   return count;
 }
 
-vec3 floatSpanInfo(vec2 cellIdx, float coord, vec2 dir, float targetState) {
-  int prevCount = countConsecutive(cellIdx, -dir, targetState);
-  int nextCount = countConsecutive(cellIdx, dir, targetState);
-  float span = float(prevCount + 1 + nextCount);
-  return vec3(float(prevCount) + coord, span, smoothstep(1.0, 4.0, span));
+vec3 floatSpanInfo(vec2 cellIdx, float coord, vec2 dir, float targetState, float cellScale) {
+  float currentState = sampleWeaveScaled(cellIdx, cellScale);
+  int prevCount = countConsecutive(cellIdx, -dir, targetState, cellScale);
+  int nextCount = countConsecutive(cellIdx, dir, targetState, cellScale);
+  bool includesCurrent = abs(currentState - targetState) <= 0.5;
+
+  if (includesCurrent) {
+    float span = float(prevCount + 1 + nextCount);
+    return vec3(float(prevCount) + coord, span, smoothstep(1.0, 4.0, span));
+  }
+
+  // When the current cell belongs to the opposite yarn, latch to the nearest
+  // real float segment instead of inventing a one-cell extension across the boundary.
+  if (prevCount > 0 && (nextCount == 0 || coord < 0.5)) {
+    float span = float(prevCount);
+    return vec3(float(prevCount) + coord, span, smoothstep(1.0, 4.0, span));
+  }
+
+  if (nextCount > 0) {
+    float span = float(nextCount);
+    return vec3(coord - 1.0, span, smoothstep(1.0, 4.0, span));
+  }
+
+  return vec3(coord, 0.0, 0.0);
 }
 
 float floatLoftFromInfo(
@@ -109,12 +148,18 @@ float carbonLine(float alongCoord, float freq, float halfWidth, float offset) {
 }
 
 float carbonFiberTone(float alongPhase, float acrossCoord, float mask, float gapWidth) {
-  float across = pow(clamp(1.0 - abs(acrossCoord) * (2.2 + gapWidth * 1.4), 0.0, 1.0), 1.5);
-  float primary = carbonLine(alongPhase, 22.0, 0.09, 0.0);
-  float secondary = carbonLine(alongPhase, 31.0, 0.052, 0.37);
-  float tertiary = carbonLine(alongPhase, 15.0, 0.11, 0.19);
-  float strand = clamp(primary * 0.94 + secondary * 0.44 + tertiary * 0.22, 0.0, 1.0);
-  float rounded = pow(strand, 1.18) * (0.84 + 0.16 * primary);
+  float across = pow(clamp(1.0 - abs(acrossCoord) * (1.95 + gapWidth * 1.05), 0.0, 1.0), 1.0);
+  float primary = carbonLine(alongPhase, 16.0, 0.088, 0.0);
+  float secondary = carbonLine(alongPhase, 24.0, 0.052, 0.29);
+  float tertiary = carbonLine(alongPhase, 34.0, 0.030, 0.12);
+  float quaternary = carbonLine(alongPhase, 11.0, 0.115, 0.41);
+  float strand = primary * 0.90
+    + secondary * 0.56
+    + tertiary * 0.26
+    + quaternary * 0.16;
+  float softClipped = strand / (1.0 + strand * 0.48);
+  float rounded = pow(clamp(softClipped, 0.0, 1.0), 1.0)
+    * (0.72 + 0.16 * primary + 0.08 * secondary);
   return rounded * across * mask;
 }
 
@@ -130,25 +175,28 @@ void main() {
     tiledUV.x + tiledUV.y * shear,
     tiledUV.y + tiledUV.x * shear
   );
-  vec2 cellIdx = floor(sh);
-  vec2 f = fract(sh);
+  float cellScale = weaveCellScale();
+  vec2 gridSh = sh / cellScale;
+  vec2 cellIdx = floor(gridSh);
+  vec2 f = fract(gridSh);
   vec2 dist = f - 0.5;
 
-  float hardOver = sampleWeave(cellIdx);
+  float hardOver = sampleWeaveScaled(cellIdx, cellScale);
   vec2 nDir = mix(vec2(-1.0), vec2(1.0), step(0.5, f));
-  float nOverX = sampleWeave(cellIdx + vec2(nDir.x, 0.0));
-  float nOverY = sampleWeave(cellIdx + vec2(0.0, nDir.y));
+  float nOverX = sampleWeaveScaled(cellIdx + vec2(nDir.x, 0.0), cellScale);
+  float nOverY = sampleWeaveScaled(cellIdx + vec2(0.0, nDir.y), cellScale);
   vec2 dBnd = min(f, 1.0 - f);
   float fw = max(fwidth(sh.x), fwidth(sh.y));
   float aaWidth = mix(4.8, 2.8, carbonFactor);
   float aaX = mix(1.0, smoothstep(0.0, fw * aaWidth, dBnd.x), abs(hardOver - nOverX));
   float aaY = mix(1.0, smoothstep(0.0, fw * aaWidth, dBnd.y), abs(hardOver - nOverY));
   float overFactor = mix(0.5, hardOver, min(aaX, aaY));
-  vec2 cellMod = mod(cellIdx, u_matrixSize);
+  vec2 logicalMatrixSize = max(u_matrixSize / cellScale, vec2(1.0));
+  vec2 cellMod = mod(cellIdx, logicalMatrixSize);
   float warpJitter = hash21(vec2(cellMod.x + 1.7, 8.1)) - 0.5;
   float weftJitter = hash21(vec2(9.3, cellMod.y + 2.4)) - 0.5;
-  float warpPhase = sh.y + cellMod.x * 0.71 + warpJitter * 0.3;
-  float weftPhase = sh.x + cellMod.y * 0.71 + weftJitter * 0.3;
+  float warpPhase = gridSh.y + cellMod.x * 0.71 + warpJitter * 0.3;
+  float weftPhase = gridSh.x + cellMod.y * 0.71 + weftJitter * 0.3;
 
   float halfWidth = u_yarnThickness * mix(0.66, 0.74, carbonFactor);
   if (carbonFactor > 0.5) {
@@ -158,9 +206,13 @@ void main() {
   float effectiveLoft = clamp(mix(u_yarnLoft, u_yarnLoft * 0.88 + 0.08, carbonFactor), 0.0, 1.0);
   float warpCross = yarnCrossProfile(dist.x, halfWidth, effectiveEdge, u_flattening, 1.0 + warpJitter * 0.08, carbonFactor);
   float weftCross = yarnCrossProfile(dist.y, halfWidth, effectiveEdge, u_flattening, 1.0 + weftJitter * 0.08, carbonFactor);
+  if (carbonFactor > 0.5) {
+    warpCross = carbonCrossSectionProfile(warpCross);
+    weftCross = carbonCrossSectionProfile(weftCross);
+  }
 
-  vec3 warpInfo = floatSpanInfo(cellIdx, f.y, vec2(0.0, 1.0), 1.0);
-  vec3 weftInfo = floatSpanInfo(cellIdx, f.x, vec2(1.0, 0.0), 0.0);
+  vec3 warpInfo = floatSpanInfo(cellIdx, f.y, vec2(0.0, 1.0), 1.0, cellScale);
+  vec3 weftInfo = floatSpanInfo(cellIdx, f.x, vec2(1.0, 0.0), 0.0, cellScale);
   float warpSpanFactor = warpInfo.z;
   float weftSpanFactor = weftInfo.z;
   float warpLongTop = floatLoftFromInfo(warpInfo, effectiveLoft, effectiveEdge, carbonFactor);
@@ -217,12 +269,12 @@ void main() {
     float topTowMask = mix(weftCross * weftLongTop, warpCross * warpLongTop, overFactor);
     float topPhase = mix(weftPhase, warpPhase, overFactor);
     float topAcross = mix(dist.y, dist.x, overFactor);
-    fiberPattern = carbonFiberTone(topPhase, topAcross, pow(clamp(topTowMask, 0.0, 1.0), 0.92), u_gapWidth);
+    fiberPattern = carbonFiberTone(topPhase, topAcross, pow(clamp(topTowMask, 0.0, 1.0), 0.78), u_gapWidth);
   }
   float fiberScale = mix(0.55, 1.0, sideMask) * mix(1.0, 0.72, ridgeMask);
   float variation = fiberPattern * u_roughnessVariation * fiberScale * mix(1.0, 1.05, carbonFactor);
   if (carbonFactor > 0.5) {
-    variation = -fiberPattern * u_roughnessVariation * fiberScale * 0.82;
+    variation = -fiberPattern * u_roughnessVariation * fiberScale * 1.20;
   }
 
   float warpNoisePhase = sh.y * 4.3 + cellMod.x * 2.31;
