@@ -24,26 +24,37 @@ function pixelsToImageData(
 
 function CenterPreview({
   currentMap,
-  allMapPixels,
+  pixels,
 }: {
   currentMap: PBRMapType;
-  allMapPixels: Record<PBRMapType, Uint8Array> | null;
+  pixels: Uint8Array | null;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [transitioning, setTransitioning] = useState(false);
+  const isInitialRef = useRef(true);
 
+  // 맵 전환 시 페이드 트랜지션
+  useEffect(() => {
+    if (isInitialRef.current) {
+      isInitialRef.current = false;
+      return;
+    }
+    setTransitioning(true);
+    const id = setTimeout(() => setTransitioning(false), 120);
+    return () => clearTimeout(id);
+  }, [currentMap]);
+
+  // 캔버스에 픽셀 그리기
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas || !allMapPixels) return;
+    if (!canvas || !pixels) return;
 
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const pixels = allMapPixels[currentMap];
-    if (!pixels) return;
-
     const imageData = pixelsToImageData(pixels, CANVAS_SIZE, CANVAS_SIZE);
     ctx.putImageData(imageData, 0, 0);
-  }, [currentMap, allMapPixels]);
+  }, [pixels]);
 
   return (
     <div className="flex flex-col items-center gap-3">
@@ -55,6 +66,11 @@ function CenterPreview({
         width={CANVAS_SIZE}
         height={CANVAS_SIZE}
         className="border border-zinc-800 rounded"
+        style={{
+          opacity: transitioning ? 0.4 : 1,
+          transform: transitioning ? 'scale(0.99)' : 'scale(1)',
+          transition: 'opacity 150ms ease-out, transform 150ms ease-out',
+        }}
       />
     </div>
   );
@@ -62,18 +78,19 @@ function CenterPreview({
 
 export default function App() {
   const [selectedMap, setSelectedMap] = useState<PBRMapType>('height');
-  const { allMapPixels, isRendering } = usePatternEngine();
+  const { engine, currentMapPixels, renderVersion, isRendering } = usePatternEngine(selectedMap);
 
   return (
     <AppLayout
       selectedMap={selectedMap}
       onSelectMap={setSelectedMap}
-      allMapPixels={allMapPixels}
+      engine={engine}
+      renderVersion={renderVersion}
       isRendering={isRendering}
       center={
         <CenterPreview
           currentMap={selectedMap}
-          allMapPixels={allMapPixels}
+          pixels={currentMapPixels}
         />
       }
     />

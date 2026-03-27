@@ -49,6 +49,12 @@ void main() {
   normal.z = max(normal.z, 0.001);
   normal = normalize(normal);
 
+  // 하부 원사 노멀 감쇠: 낮은 영역은 위 원사 그림자에 묻혀 디테일이 약해짐
+  float centerH = texture(u_heightMap, v_uv).r;
+  float depthAtten = smoothstep(0.1, 0.55, centerH);
+  normal.xy *= mix(0.35, 1.0, depthAtten);
+  normal = normalize(normal);
+
   // 탄젠트 공간 노멀 → 색상 공간
   fragColor = vec4(normal * 0.5 + 0.5, 1.0);
 }

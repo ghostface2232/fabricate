@@ -9,7 +9,6 @@ uniform vec3 u_color1;  // warp color or fiber color
 uniform vec3 u_color2;  // weft color or resin color
 uniform float u_yarnThickness;
 uniform float u_twistAngle;
-uniform float u_twistIntensity;
 uniform int u_patternType;  // 0-2: fabric, 3-4: carbon
 
 in vec2 v_uv;
@@ -30,7 +29,7 @@ float yarnProfile(float d, float r) {
 void main() {
   // ── Shear 좌표계 (Height Map과 동일) ──
   vec2 tiledUV = v_uv * u_density;
-  float rawShear = sin(u_twistAngle) * u_twistIntensity;
+  float rawShear = sin(u_twistAngle);
   float shear = round(rawShear * u_density) / u_density;
 
   vec2 sh = vec2(
@@ -57,11 +56,18 @@ void main() {
   // ── 원사 프로파일 (유기적 변형 적용) ──
   float halfR = u_yarnThickness * 0.7;
 
+  // 섬유 방향 기준 위상 (회전 기반 — 디테일이 섬유에 항상 수직)
+  float effTwist = u_twistAngle;
+  float twC = cos(effTwist);
+  float twS = sin(effTwist);
+  float warpPhase = tiledUV.x * twS + tiledUV.y * twC;
+  float weftPhase = tiledUV.x * twC + tiledUV.y * twS;
+
   // 원사 경계를 약간 물결치게: 셀마다 다른 위상
-  float distortX = sin(sh.y * 18.0 + cellIdx.x * 7.3) * 0.006
-                 + sin(sh.y * 31.0) * 0.004;
-  float distortY = sin(sh.x * 18.0 + cellIdx.y * 5.9) * 0.006
-                 + sin(sh.x * 31.0) * 0.004;
+  float distortX = sin(warpPhase * 18.0 + cellIdx.x * 7.3) * 0.006
+                 + sin(warpPhase * 31.0) * 0.004;
+  float distortY = sin(weftPhase * 18.0 + cellIdx.y * 5.9) * 0.006
+                 + sin(weftPhase * 31.0) * 0.004;
   vec2 organicDist = dist + vec2(distortX, distortY);
 
   float warpP = yarnProfile(organicDist.x, halfR);
@@ -79,8 +85,8 @@ void main() {
   vec3 yarnColor = mix(colorWeftOver, colorWarpOver, overFactor);
 
   // 원사 길이 방향 섬유 톤 변화
-  float warpTone = sin(sh.y * 25.0 + cellIdx.x * 3.1) * 0.025 * warpP;
-  float weftTone = sin(sh.x * 25.0 + cellIdx.y * 4.7) * 0.025 * weftP;
+  float warpTone = sin(warpPhase * 25.0 + cellIdx.x * 3.1) * 0.025 * warpP;
+  float weftTone = sin(weftPhase * 25.0 + cellIdx.y * 4.7) * 0.025 * weftP;
   float fiberTone = mix(weftTone, warpTone, overFactor);
   yarnColor *= 1.0 + fiberTone;
 

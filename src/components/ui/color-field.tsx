@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 
 import { Input } from "@/components/ui/input"
 import {
@@ -152,6 +152,16 @@ function HexField({
   )
 }
 
+/** 8-bit 정밀도 이내 색상 동일 여부 */
+function colorEqual(a: RGB01, b: RGB01): boolean {
+  const eps = 0.5 / 255
+  return (
+    Math.abs(a[0] - b[0]) < eps &&
+    Math.abs(a[1] - b[1]) < eps &&
+    Math.abs(a[2] - b[2]) < eps
+  )
+}
+
 export function ColorField({
   label,
   value,
@@ -164,19 +174,60 @@ export function ColorField({
   className?: string
 }) {
   const [open, setOpen] = useState(false)
+
+  // 팝오버 열림 중 로컬 draft 색상 (스토어에 반영하지 않음)
+  const [draft, setDraft] = useState<RGB01>(value)
   const [hexDraft, setHexDraft] = useState(rgb01ToHex(value))
-  const hsb = rgb01ToHsb(value)
-  const hex = rgb01ToHex(value)
 
-  useEffect(() => {
-    setHexDraft(hex)
-  }, [hex])
+  // 팝오버 닫힘 중 외부 value 변경 시 draft 동기화
+  const prevValueRef = useRef(value)
+  if (!open && prevValueRef.current !== value) {
+    prevValueRef.current = value
+    setDraft(value)
+    setHexDraft(rgb01ToHex(value))
+  }
 
-  const applyHex = (nextHex: string) => {
+  // draft 파생 값
+  const draftHsb = rgb01ToHsb(draft)
+  const draftHex = rgb01ToHex(draft)
+
+  // 커밋 값 (트리거 버튼에 표시)
+  const committedHex = rgb01ToHex(value)
+  const committedHsb = rgb01ToHsb(value)
+
+  // draft HSB 슬라이더 변경 → draft만 갱신
+  const updateDraftHsb = (newHsb: HSB) => {
+    const rgb = hsbToRgb01(newHsb)
+    setDraft(rgb)
+    setHexDraft(rgb01ToHex(rgb))
+  }
+
+  // draft hex 입력 커밋 → draft만 갱신
+  const applyHexToDraft = (nextHex: string) => {
     if (/^#[0-9a-f]{6}$/i.test(nextHex)) {
-      onChange(hexToRgb01(nextHex))
+      const rgb = hexToRgb01(nextHex)
+      setDraft(rgb)
+      setHexDraft(nextHex)
     }
   }
+
+  // 팝오버 열기/닫기
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (nextOpen) {
+      // 열기: draft를 현재 committed 값으로 초기화
+      setDraft(value)
+      setHexDraft(rgb01ToHex(value))
+    } else {
+      // 닫기: draft가 바뀌었으면 커밋
+      if (!colorEqual(draft, value)) {
+        onChange(draft)
+      }
+    }
+    setOpen(nextOpen)
+  }
+
+  // hexDraft는 draft가 슬라이더로 바뀔 때 자동 동기화 (updateDraftHsb에서 처리)
+  // 사용자가 hex 입력 중일 때는 직접 제어하므로 추가 동기화 불필요
 
   return (
     <div className={cn("space-y-2.5", className)}>
@@ -184,7 +235,7 @@ export function ColorField({
         <span className="text-[11px] uppercase tracking-[0.2em] text-zinc-500">
           {label}
         </span>
-        <Popover open={open} onOpenChange={setOpen}>
+        <Popover open={open} onOpenChange={handleOpenChange}>
           <PopoverTrigger asChild>
             <button
               type="button"
@@ -192,14 +243,14 @@ export function ColorField({
             >
               <span
                 className="size-6 shrink-0 rounded-md border border-white/10 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
-                style={{ backgroundColor: hex }}
+                style={{ backgroundColor: committedHex }}
               />
               <span className="min-w-0 flex-1">
                 <span className="block truncate font-mono text-xs tracking-[0.16em] text-zinc-200 uppercase">
-                  {hex}
+                  {committedHex}
                 </span>
                 <span className="block truncate text-[11px] text-zinc-500 group-hover:text-zinc-400">
-                  H {hsb[0]} / S {hsb[1]} / B {hsb[2]}
+                  H {committedHsb[0]} / S {committedHsb[1]} / B {committedHsb[2]}
                 </span>
               </span>
             </button>
@@ -207,37 +258,38 @@ export function ColorField({
           <PopoverContent
             align="end"
             sideOffset={8}
+            onOpenAutoFocus={(e) => e.preventDefault()}
             className="w-[280px] gap-4 rounded-2xl border border-zinc-800 bg-zinc-900/96 p-4 text-zinc-200 shadow-2xl shadow-black/40 backdrop-blur"
           >
             <PopoverTitle className="text-sm font-medium text-zinc-100">
               {label}
             </PopoverTitle>
-            <ColorPreview value={value} />
+            <ColorPreview value={draft} />
             <HexField
               value={hexDraft}
               onChange={setHexDraft}
-              onCommit={applyHex}
+              onCommit={applyHexToDraft}
             />
             <div className="space-y-3 rounded-xl border border-zinc-800 bg-zinc-950/70 p-3">
               <ChannelRow
                 label="H"
                 max={360}
-                value={hsb[0]}
-                onChange={(next) => onChange(hsbToRgb01([next, hsb[1], hsb[2]]))}
+                value={draftHsb[0]}
+                onChange={(next) => updateDraftHsb([next, draftHsb[1], draftHsb[2]])}
               />
               <ChannelRow
                 label="S"
                 max={100}
                 suffix="%"
-                value={hsb[1]}
-                onChange={(next) => onChange(hsbToRgb01([hsb[0], next, hsb[2]]))}
+                value={draftHsb[1]}
+                onChange={(next) => updateDraftHsb([draftHsb[0], next, draftHsb[2]])}
               />
               <ChannelRow
                 label="B"
                 max={100}
                 suffix="%"
-                value={hsb[2]}
-                onChange={(next) => onChange(hsbToRgb01([hsb[0], hsb[1], next]))}
+                value={draftHsb[2]}
+                onChange={(next) => updateDraftHsb([draftHsb[0], draftHsb[1], next])}
               />
             </div>
           </PopoverContent>

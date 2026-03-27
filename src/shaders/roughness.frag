@@ -8,7 +8,6 @@ uniform vec2 u_matrixSize;
 uniform float u_density;
 uniform float u_yarnThickness;
 uniform float u_twistAngle;
-uniform float u_twistIntensity;
 uniform float u_roughnessBase;
 uniform float u_roughnessVariation;
 uniform float u_cavityInfluence;
@@ -39,7 +38,7 @@ void main() {
 
   // ── 원사 방향 계산 ──
   vec2 tiledUV = v_uv * u_density;
-  float rawShear = sin(u_twistAngle) * u_twistIntensity;
+  float rawShear = sin(u_twistAngle);
   float shear = round(rawShear * u_density) / u_density;
   vec2 sh = vec2(
     tiledUV.x + tiledUV.y * shear,
@@ -95,9 +94,15 @@ void main() {
   zoneRoughness = mix(zoneRoughness, sidewallRoughness, sidewallMask);
   zoneRoughness = mix(zoneRoughness, valleyRoughness, valleyMask);
 
-  // ── 방향성 섬유 패턴 (구역별 스케일) ──
-  float warpFiber = sin(sh.y * 120.0) * 0.5 + 0.5;
-  float weftFiber = sin(sh.x * 120.0) * 0.5 + 0.5;
+  // ── 방향성 섬유 패턴 (회전 기반 — 섬유에 항상 수직) ──
+  float effTwist = u_twistAngle;
+  float twC = cos(effTwist);
+  float twS = sin(effTwist);
+  float warpFiberPhase = tiledUV.x * twS + tiledUV.y * twC;
+  float weftFiberPhase = tiledUV.x * twC + tiledUV.y * twS;
+
+  float warpFiber = sin(warpFiberPhase * 120.0) * 0.5 + 0.5;
+  float weftFiber = sin(weftFiberPhase * 120.0) * 0.5 + 0.5;
 
   float warpVis = warpP * mix(0.3, 1.0, overFactor);
   float weftVis = weftP * mix(1.0, 0.3, overFactor);

@@ -199,20 +199,12 @@ export default function ParamControlPanel() {
           <Separator className="bg-zinc-800" />
           <div className="space-y-5">
             <SliderRow
-              label="Twist Angle"
+              label="Twist"
               value={params.twistAngle}
               min={0}
               max={90}
               step={1}
               onChange={(v) => updateParams({ twistAngle: v })}
-            />
-            <SliderRow
-              label="Twist Intensity"
-              value={params.twistIntensity}
-              min={0}
-              max={1}
-              step={0.01}
-              onChange={(v) => updateParams({ twistIntensity: v })}
             />
           </div>
         </>

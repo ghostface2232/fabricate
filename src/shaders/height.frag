@@ -6,7 +6,6 @@ uniform vec2 u_matrixSize;
 uniform float u_density;
 uniform float u_yarnThickness;
 uniform float u_twistAngle;
-uniform float u_twistIntensity;
 uniform float u_flattening;
 
 in vec2 v_uv;
@@ -30,7 +29,7 @@ void main() {
   vec2 tiledUV = v_uv * u_density;
   float halfR = u_yarnThickness * 0.7;
   // shear 양자화: density * shear를 정수로 맞춰 타일링 이음새 제거
-  float rawShear = sin(u_twistAngle) * u_twistIntensity;
+  float rawShear = sin(u_twistAngle);
   float shear = round(rawShear * u_density) / u_density;
 
   // shear 좌표 → 셀 분율 / 원사 중심 거리
@@ -66,14 +65,21 @@ void main() {
   float warpP = yarnProfile(dist.x, r.x);
   float weftP = yarnProfile(dist.y, r.y);
 
-  // 미세 줄무늬 (다중 주파수 합성, 경계 연속)
-  float warpS = (sin(sh.y * 40.0) + sin(sh.y * 27.0 + 1.7) * 0.5) * 0.008 * warpP;
-  float weftS = (sin(sh.x * 40.0) + sin(sh.x * 27.0 + 2.3) * 0.5) * 0.008 * weftP;
+  // 섬유 방향 기준 위상 (회전 기반 — 주름이 섬유에 항상 수직)
+  float effTwist = u_twistAngle;
+  float twC = cos(effTwist);
+  float twS = sin(effTwist);
+  float warpPhase = tiledUV.x * twS + tiledUV.y * twC;
+  float weftPhase = tiledUV.x * twC + tiledUV.y * twS;
+
+  // 미세 줄무늬 (다중 주파수 합성)
+  float warpS = (sin(warpPhase * 40.0) + sin(warpPhase * 27.0 + 1.7) * 0.5) * 0.008 * warpP;
+  float weftS = (sin(weftPhase * 40.0) + sin(weftPhase * 27.0 + 2.3) * 0.5) * 0.008 * weftP;
 
   // ── 높이 산출 ──
   float crossing = warpP * weftP;
   float topBase = mix(0.58, 0.95, crossing);
-  float botBase = mix(0.40, 0.05, crossing);
+  float botBase = mix(0.22, 0.05, crossing);
   float flatten = 1.0 - u_flattening * crossing;
 
   // warp-over / weft-over 각각의 최종 height를 독립 계산 후 블렌딩

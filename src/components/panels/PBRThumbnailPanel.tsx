@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import type { PBRMapType } from '@/types/pattern';
+import type { PatternEngine } from '@/engine/PatternEngine';
 
 const THUMB_SIZE = 200;
 const MAPS: { type: PBRMapType; label: string }[] = [
@@ -28,34 +29,43 @@ function pixelsToImageData(
 }
 
 function Thumbnail({
-  pixels,
+  engine,
+  mapType,
+  renderVersion,
   label,
   selected,
   onClick,
 }: {
-  pixels: Uint8Array | null;
+  engine: PatternEngine | null;
+  mapType: PBRMapType;
+  renderVersion: number;
   label: string;
   selected: boolean;
   onClick: () => void;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
+  const offscreenRef = useRef<OffscreenCanvas | null>(null);
+
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas || !pixels) return;
+    if (!canvas || !engine || renderVersion === 0) return;
+    const pixels = engine.getMapPixels(mapType);
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     const imageData = pixelsToImageData(pixels, 512, 512);
-    ctx.clearRect(0, 0, THUMB_SIZE, THUMB_SIZE);
-    const tmp = new OffscreenCanvas(512, 512);
-    const tmpCtx = tmp.getContext('2d')!;
+    if (!offscreenRef.current) {
+      offscreenRef.current = new OffscreenCanvas(512, 512);
+    }
+    const tmpCtx = offscreenRef.current.getContext('2d')!;
     tmpCtx.putImageData(imageData, 0, 0);
-    ctx.drawImage(tmp, 0, 0, THUMB_SIZE, THUMB_SIZE);
-  }, [pixels]);
+    ctx.clearRect(0, 0, THUMB_SIZE, THUMB_SIZE);
+    ctx.drawImage(offscreenRef.current, 0, 0, THUMB_SIZE, THUMB_SIZE);
+  }, [engine, mapType, renderVersion]);
 
   return (
-    <button onClick={onClick} className="w-full flex flex-col gap-1.5 min-h-0 rounded-xl p-1 transition-colors hover:bg-zinc-900/60">
-      <span className="shrink-0 text-[11px] uppercase tracking-[0.18em] text-zinc-500">{label}</span>
+    <button onClick={onClick} className="w-full flex flex-col gap-1.5 min-h-0 rounded-xl p-1 transition-colors hover:bg-zinc-900/60 text-left">
+      <span className="self-start shrink-0 text-[11px] uppercase tracking-[0.18em] text-zinc-500">{label}</span>
       <canvas
         ref={canvasRef}
         width={THUMB_SIZE}
@@ -71,21 +81,25 @@ function Thumbnail({
 interface PBRThumbnailPanelProps {
   selectedMap: PBRMapType;
   onSelectMap: (map: PBRMapType) => void;
-  allMapPixels: Record<PBRMapType, Uint8Array> | null;
+  engine: PatternEngine | null;
+  renderVersion: number;
 }
 
 export default function PBRThumbnailPanel({
   selectedMap,
   onSelectMap,
-  allMapPixels,
+  engine,
+  renderVersion,
 }: PBRThumbnailPanelProps) {
   return (
     <div className="h-full flex flex-col gap-3">
       {MAPS.map(({ type, label }) => (
         <Thumbnail
           key={type}
+          engine={engine}
+          mapType={type}
+          renderVersion={renderVersion}
           label={label}
-          pixels={allMapPixels?.[type] ?? null}
           selected={selectedMap === type}
           onClick={() => onSelectMap(type)}
         />

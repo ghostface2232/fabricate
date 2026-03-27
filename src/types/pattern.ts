@@ -22,8 +22,6 @@ export interface WeaveParams {
   yarnThickness: number;
   /** 꼬임 각도 (0-90도) */
   twistAngle: number;
-  /** 꼬임 강도 (0-1) */
-  twistIntensity: number;
   /** 교차점에서 원사가 납작해지는 정도 (0-1) */
   flattening: number;
   /** 능직 방향: 1 = Z능직, -1 = S능직 (능직 전용) */

@@ -37,8 +37,7 @@ function getDefaultParams(type: PatternType): PatternParams {
         weftColor: [0.92, 0.88, 0.82],
         density: 20,
         yarnThickness: 0.7,
-        twistAngle: 15,
-        twistIntensity: 0.2,
+        twistAngle: 0,
         flattening: 0.3,
         twillDirection: 1,
         satinShift: 2,
@@ -51,8 +50,7 @@ function getDefaultParams(type: PatternType): PatternParams {
         weftColor: [0.75, 0.72, 0.67],
         density: 20,
         yarnThickness: 0.7,
-        twistAngle: 30,
-        twistIntensity: 0.3,
+        twistAngle: 9,
         flattening: 0.4,
         twillDirection: 1,
         satinShift: 2,
@@ -65,8 +63,7 @@ function getDefaultParams(type: PatternType): PatternParams {
         weftColor: [0.88, 0.85, 0.78],
         density: 30,
         yarnThickness: 0.65,
-        twistAngle: 10,
-        twistIntensity: 0.15,
+        twistAngle: 0,
         flattening: 0.5,
         twillDirection: 1,
         satinShift: 2,
@@ -126,6 +123,24 @@ interface PatternActions {
 
 export type PatternStore = PatternState & PatternActions;
 
+/** partial의 값이 현재 상태와 다른지 확인 (배열은 요소 비교) */
+function hasChanges(
+  current: Record<string, unknown>,
+  partial: Record<string, unknown>,
+): boolean {
+  for (const key of Object.keys(partial)) {
+    const n = partial[key];
+    const c = current[key];
+    if (Array.isArray(n) && Array.isArray(c)) {
+      if (n.length !== c.length || n.some((v: number, i: number) => v !== c[i]))
+        return true;
+    } else if (n !== c) {
+      return true;
+    }
+  }
+  return false;
+}
+
 // ─── Store 생성 ──────────────────────────────────────────────
 
 export const usePatternStore = create<PatternStore>((set, get) => ({
@@ -139,15 +154,17 @@ export const usePatternStore = create<PatternStore>((set, get) => ({
   },
 
   updateParams: (partial) => {
-    set((state) => ({
-      params: { ...state.params, ...partial } as PatternParams,
-    }));
+    const current = get().params;
+    if (!hasChanges(current as unknown as Record<string, unknown>, partial as Record<string, unknown>))
+      return;
+    set({ params: { ...current, ...partial } as PatternParams });
   },
 
   updatePBRSettings: (partial) => {
-    set((state) => ({
-      pbrSettings: { ...state.pbrSettings, ...partial },
-    }));
+    const current = get().pbrSettings;
+    if (!hasChanges(current as unknown as Record<string, unknown>, partial as Record<string, unknown>))
+      return;
+    set({ pbrSettings: { ...current, ...partial } });
   },
 
   updateExportSettings: (partial) => {

@@ -52,6 +52,12 @@ export class PatternEngine {
   private matrixTexture: WebGLTexture | null = null;
   private currentSize = RENDER_SIZE;
 
+  // 증분 렌더링용 이전 상태
+  private prevParams: PatternParams | null = null;
+  private prevPbrSettings: PBRSettings | null = null;
+  private lastMatrixWidth = 0;
+  private lastMatrixHeight = 0;
+
   constructor() {
     this.ctx = new WebGLContext(RENDER_SIZE, RENDER_SIZE);
     this.quad = new FullscreenQuad(this.ctx);
@@ -71,8 +77,25 @@ export class PatternEngine {
     this.diffuseTarget = new RenderTarget(this.ctx, RENDER_SIZE, RENDER_SIZE);
   }
 
-  /** 전체 PBR 맵 렌더링 파이프라인 */
+  /** 변경 사항에 따라 필요한 패스만 재렌더링 */
   generate(params: PatternParams, pbrSettings: PBRSettings): void {
+    const colorOnly = this.prevParams !== null
+      && this.matrixTexture !== null
+      && PatternEngine.isColorOnlyChange(this.prevParams, params)
+      && PatternEngine.pbrSettingsEqual(this.prevPbrSettings!, pbrSettings);
+
+    if (colorOnly) {
+      this.renderDiffusePass(params);
+    } else {
+      this.renderFullPipeline(params, pbrSettings);
+    }
+
+    this.prevParams = params;
+    this.prevPbrSettings = pbrSettings;
+  }
+
+  /** 전체 5-pass 파이프라인 */
+  private renderFullPipeline(params: PatternParams, pbrSettings: PBRSettings): void {
     const { ctx, quad } = this;
     const gl = ctx.gl;
 
@@ -93,6 +116,8 @@ export class PatternEngine {
       weaveResult.height,
       'R8',
     );
+    this.lastMatrixWidth = weaveResult.width;
+    this.lastMatrixHeight = weaveResult.height;
 
     const density = params.density;
     const yarnThickness = params.yarnThickness;
@@ -114,10 +139,8 @@ export class PatternEngine {
 
     if (params.type === 'plainWeave' || params.type === 'twillWeave' || params.type === 'satinWeave') {
       this.heightShader.setUniform('u_twistAngle', params.twistAngle * (Math.PI / 180));
-      this.heightShader.setUniform('u_twistIntensity', params.twistIntensity);
     } else {
       this.heightShader.setUniform('u_twistAngle', 0);
-      this.heightShader.setUniform('u_twistIntensity', 0);
     }
 
     quad.draw();
@@ -176,10 +199,8 @@ export class PatternEngine {
 
     if (params.type === 'plainWeave' || params.type === 'twillWeave' || params.type === 'satinWeave') {
       this.roughnessShader.setUniform('u_twistAngle', params.twistAngle * (Math.PI / 180));
-      this.roughnessShader.setUniform('u_twistIntensity', params.twistIntensity);
     } else {
       this.roughnessShader.setUniform('u_twistAngle', 0);
-      this.roughnessShader.setUniform('u_twistIntensity', 0);
     }
 
     quad.draw();
@@ -201,24 +222,92 @@ export class PatternEngine {
 
     if (params.type === 'plainWeave' || params.type === 'twillWeave' || params.type === 'satinWeave') {
       this.diffuseShader.setUniform('u_twistAngle', params.twistAngle * (Math.PI / 180));
-      this.diffuseShader.setUniform('u_twistIntensity', params.twistIntensity);
     } else {
       this.diffuseShader.setUniform('u_twistAngle', 0);
-      this.diffuseShader.setUniform('u_twistIntensity', 0);
     }
 
     // 컬러 설정: fabric → warpColor/weftColor, carbon → fiberColor/resinColor
     if (params.type === 'plainWeave' || params.type === 'twillWeave' || params.type === 'satinWeave') {
-      this.diffuseShader.setUniform('u_color1', [...params.warpColor]);
-      this.diffuseShader.setUniform('u_color2', [...params.weftColor]);
+      this.diffuseShader.setUniform('u_color1', params.warpColor);
+      this.diffuseShader.setUniform('u_color2', params.weftColor);
     } else {
-      this.diffuseShader.setUniform('u_color1', [...params.fiberColor]);
-      this.diffuseShader.setUniform('u_color2', [...params.resinColor]);
+      this.diffuseShader.setUniform('u_color1', params.fiberColor);
+      this.diffuseShader.setUniform('u_color2', params.resinColor);
     }
 
     quad.draw();
     this.diffuseShader.unuse();
     this.diffuseTarget.unbind();
+  }
+
+  /** Diffuse 패스만 재렌더링 (색상 변경 시) */
+  private renderDiffusePass(params: PatternParams): void {
+    const { quad } = this;
+    const gl = this.ctx.gl;
+    const heightTex = this.heightTarget.getTexture();
+
+    this.diffuseTarget.bind();
+    gl.clearColor(0, 0, 0, 1);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+
+    this.diffuseShader.use();
+    this.diffuseShader.setUniform('u_weaveMatrix', this.matrixTexture!);
+    this.diffuseShader.setUniform('u_matrixSize', [this.lastMatrixWidth, this.lastMatrixHeight]);
+    this.diffuseShader.setUniform('u_density', params.density);
+    this.diffuseShader.setUniform('u_heightMap', heightTex);
+    this.diffuseShader.setUniform('u_yarnThickness', params.yarnThickness);
+    this.diffuseShader.setUniformInt('u_patternType', patternTypeToInt(params.type));
+
+    if (params.type === 'plainWeave' || params.type === 'twillWeave' || params.type === 'satinWeave') {
+      this.diffuseShader.setUniform('u_twistAngle', params.twistAngle * (Math.PI / 180));
+    } else {
+      this.diffuseShader.setUniform('u_twistAngle', 0);
+    }
+
+    if (params.type === 'plainWeave' || params.type === 'twillWeave' || params.type === 'satinWeave') {
+      this.diffuseShader.setUniform('u_color1', params.warpColor);
+      this.diffuseShader.setUniform('u_color2', params.weftColor);
+    } else {
+      this.diffuseShader.setUniform('u_color1', params.fiberColor);
+      this.diffuseShader.setUniform('u_color2', params.resinColor);
+    }
+
+    quad.draw();
+    this.diffuseShader.unuse();
+    this.diffuseTarget.unbind();
+  }
+
+  /** 색상만 바뀌었는지 판별 (구조적 파라미터 동일 여부) */
+  private static isColorOnlyChange(prev: PatternParams, next: PatternParams): boolean {
+    if (prev.type !== next.type) return false;
+    if (prev.density !== next.density) return false;
+    if (prev.yarnThickness !== next.yarnThickness) return false;
+    if (prev.flattening !== next.flattening) return false;
+
+    if ('twistAngle' in prev && 'twistAngle' in next) {
+      if (prev.twistAngle !== next.twistAngle) return false;
+      if (prev.twillDirection !== next.twillDirection) return false;
+      if (prev.satinShift !== next.satinShift) return false;
+      if (prev.repeatSize !== next.repeatSize) return false;
+    } else if ('towK' in prev && 'towK' in next) {
+      if (prev.towK !== next.towK) return false;
+      if (prev.glossiness !== next.glossiness) return false;
+      if (prev.gapWidth !== next.gapWidth) return false;
+      if (prev.weavePattern !== next.weavePattern) return false;
+    }
+
+    return true;
+  }
+
+  /** PBR 설정 동일 여부 */
+  private static pbrSettingsEqual(a: PBRSettings, b: PBRSettings): boolean {
+    return a.normalStrength === b.normalStrength
+      && a.normalFilter === b.normalFilter
+      && a.aoRadius === b.aoRadius
+      && a.aoIntensity === b.aoIntensity
+      && a.roughnessBase === b.roughnessBase
+      && a.roughnessVariation === b.roughnessVariation
+      && a.roughnessCavityInfluence === b.roughnessCavityInfluence;
   }
 
   /** 지정 맵의 렌더 타겟 반환 */
@@ -269,7 +358,8 @@ export class PatternEngine {
     this.diffuseTarget.resize(resolution, resolution);
     this.currentSize = resolution;
 
-    // 전체 파이프라인 재렌더링
+    // 전체 파이프라인 재렌더링 (해상도 변경이므로 전체 강제)
+    this.prevParams = null;
     this.generate(params, pbrSettings);
 
     // 기본 해상도 복원 후 프리뷰용 재렌더링
@@ -281,6 +371,7 @@ export class PatternEngine {
     this.diffuseTarget.resize(RENDER_SIZE, RENDER_SIZE);
     this.currentSize = RENDER_SIZE;
 
+    this.prevParams = null;
     this.generate(params, pbrSettings);
   }
 

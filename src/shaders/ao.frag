@@ -40,8 +40,8 @@ void main() {
   float ao = 1.0 - clamp(occlusion * u_intensity, 0.0, 1.0);
 
   // 구조적 깊이 AO: 낮은 영역(틈새, 하부 원사)을 어둡게
-  float depthFactor = smoothstep(0.0, 0.5, centerH);
-  ao *= mix(0.35, 1.0, depthFactor);
+  float depthFactor = smoothstep(0.0, 0.7, centerH);
+  ao *= mix(0.25, 1.0, depthFactor);
 
   // 방향성 캐비티: 십자 샘플링으로 교차점 경계 강조
   float hL = sampleH(v_uv + vec2(-1.0, 0.0) * u_texelSize);

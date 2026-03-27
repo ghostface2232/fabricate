@@ -14,12 +14,14 @@ import PatternTypeSelector from '@/components/panels/PatternTypeSelector';
 import ParamControlPanel from '@/components/panels/ParamControlPanel';
 import PBRThumbnailPanel from '@/components/panels/PBRThumbnailPanel';
 import type { PBRMapType } from '@/types/pattern';
+import type { PatternEngine } from '@/engine/PatternEngine';
 
 interface AppLayoutProps {
   center: React.ReactNode;
   selectedMap: PBRMapType;
   onSelectMap: (map: PBRMapType) => void;
-  allMapPixels: Record<PBRMapType, Uint8Array> | null;
+  engine: PatternEngine | null;
+  renderVersion: number;
   isRendering: boolean;
 }
 
@@ -27,7 +29,8 @@ export default function AppLayout({
   center,
   selectedMap,
   onSelectMap,
-  allMapPixels,
+  engine,
+  renderVersion,
   isRendering,
 }: AppLayoutProps) {
   const loadPreset = usePatternStore((s) => s.loadPreset);
@@ -107,7 +110,8 @@ export default function AppLayout({
           <PBRThumbnailPanel
             selectedMap={selectedMap}
             onSelectMap={onSelectMap}
-            allMapPixels={allMapPixels}
+            engine={engine}
+            renderVersion={renderVersion}
           />
         </div>
       </div>
