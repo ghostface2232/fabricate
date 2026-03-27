@@ -159,6 +159,8 @@ export class PatternEngine {
     this.heightShader.setUniform('u_yarnThickness', yarnThickness);
     this.heightShader.setUniform('u_flattening', flattening);
 
+    this.heightShader.setUniformInt('u_patternType', typeInt);
+
     if (params.type === 'plainWeave' || params.type === 'twillWeave' || params.type === 'satinWeave') {
       this.heightShader.setUniform('u_twistAngle', params.twistAngle * (Math.PI / 180));
     } else {
@@ -182,6 +184,7 @@ export class PatternEngine {
     this.normalShader.setUniform('u_texelSize', texelSize);
     this.normalShader.setUniform('u_strength', pbrSettings.normalStrength);
     this.normalShader.setUniformInt('u_filter', pbrSettings.normalFilter === 'scharr' ? 1 : 0);
+    this.normalShader.setUniformInt('u_patternType', typeInt);
 
     quad.draw();
     this.normalShader.unuse();

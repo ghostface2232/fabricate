@@ -173,11 +173,11 @@ export default function ParamControlPanel() {
       <div className="space-y-5">
         <SliderRow
           label="Density"
-          value={params.density}
-          min={1}
-          max={80}
-          step={1}
-          onChange={(v) => updateParams({ density: v })}
+          value={(params.density - 15) / 45}
+          min={0}
+          max={1}
+          step={0.01}
+          onChange={(v) => updateParams({ density: Math.round(v * 45 + 15) })}
         />
         <SliderRow
           label="Yarn Thickness"

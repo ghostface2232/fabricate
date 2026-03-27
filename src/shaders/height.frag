@@ -7,17 +7,17 @@ uniform float u_density;
 uniform float u_yarnThickness;
 uniform float u_twistAngle;
 uniform float u_flattening;
+uniform int u_patternType;  // 0-2: fabric, 3-4: carbon
 
 in vec2 v_uv;
 out vec4 fragColor;
 
-// 매트릭스 셀의 over/under 값 (0.0 또는 1.0)
 float sampleWeave(vec2 cellIdx) {
   vec2 uv = (mod(cellIdx, u_matrixSize) + 0.5) / u_matrixSize;
   return step(0.5, texture(u_weaveMatrix, uv).r);
 }
 
-// 원사 단면: C¹ smooth 다항식 (1-t²)²(1+1.5t²)
+// 패브릭 원사 단면: C¹ smooth (1-t²)²(1+1.5t²)
 float yarnProfile(float d, float r) {
   float t = clamp(abs(d) / r, 0.0, 1.0);
   float s = t * t;
@@ -25,82 +25,131 @@ float yarnProfile(float d, float r) {
   return u * u * (1.0 + 1.5 * s);
 }
 
+// 카본 토우 단면: 볼록 dome + 날카로운 에지 컷
+float carbonProfile(float d, float r) {
+  float t = clamp(abs(d) / r, 0.0, 1.0);
+  float dome = 1.0 - 0.3 * t * t;          // 중앙 볼록 (30% 높이 차)
+  float edge = smoothstep(1.0, 0.75, t);    // 75%부터 급격 드롭
+  return dome * edge;
+}
+
 void main() {
-  // density를 매트릭스 크기의 배수로 스냅 → 타일 경계 이음새 제거
+  // density를 매트릭스 크기의 배수로 스냅
   float density = max(u_matrixSize.x, round(u_density / u_matrixSize.x) * u_matrixSize.x);
   vec2 tiledUV = v_uv * density;
   float halfR = u_yarnThickness * 0.7;
-  // shear 양자화: density * shear를 매트릭스 크기의 배수로 맞춰 타일링 이음새 제거
   float rawShear = sin(u_twistAngle);
   float shear = round(rawShear * density / u_matrixSize.x) * u_matrixSize.x / density;
 
-  // shear 좌표 → 셀 분율 / 원사 중심 거리
   vec2 sh = vec2(
     tiledUV.x + tiledUV.y * shear,
     tiledUV.y + tiledUV.x * shear
   );
   vec2 cellIdx = floor(sh);
-  vec2 f = fract(sh);        // 셀 내 분율 [0,1)
-  vec2 dist = f - 0.5;       // 원사 중심까지 거리 [-0.5, 0.5)
+  vec2 f = fract(sh);
+  vec2 dist = f - 0.5;
 
   float hardOver = sampleWeave(cellIdx);
+  bool isCarbon = u_patternType >= 3;
 
-  // ── 셀 경계 AA (상태가 바뀌는 경계에서만) ──
+  // ── 이웃 셀 샘플링 ──
   vec2 nDir = mix(vec2(-1.0), vec2(1.0), step(0.5, f));
   float nOverX = sampleWeave(cellIdx + vec2(nDir.x, 0.0));
   float nOverY = sampleWeave(cellIdx + vec2(0.0, nDir.y));
 
+  // ── 셀 경계 AA ──
   vec2 dBnd = min(f, 1.0 - f);
   float fw = max(fwidth(sh.x), fwidth(sh.y));
-  float aaX = mix(1.0, smoothstep(0.0, fw * 5.0, dBnd.x), abs(hardOver - nOverX));
-  float aaY = mix(1.0, smoothstep(0.0, fw * 5.0, dBnd.y), abs(hardOver - nOverY));
+  float aaEdge = isCarbon ? 3.0 : 5.0;
+  float aaX = mix(1.0, smoothstep(0.0, fw * aaEdge, dBnd.x), abs(hardOver - nOverX));
+  float aaY = mix(1.0, smoothstep(0.0, fw * aaEdge, dBnd.y), abs(hardOver - nOverY));
   float overFactor = mix(0.5, hardOver, min(aaX, aaY));
 
-  // ── 교차점 짓눌림 (pinch): 수직 원사 근접 시 반경 축소 ──
-  vec2 prox = vec2(
-    smoothstep(halfR, 0.0, abs(dist.y)),
-    smoothstep(halfR, 0.0, abs(dist.x))
-  );
-  vec2 r = halfR * (1.0 - 0.03 * prox);
+  // ── 원사/토우 프로파일 ──
+  float warpP, weftP;
+  if (isCarbon) {
+    warpP = carbonProfile(dist.x, halfR);
+    weftP = carbonProfile(dist.y, halfR);
+  } else {
+    // 교차점 짓눌림: 수직 원사 근접 시 반경 축소
+    vec2 prox = vec2(
+      smoothstep(halfR, 0.0, abs(dist.y)),
+      smoothstep(halfR, 0.0, abs(dist.x))
+    );
+    vec2 r = halfR * (1.0 - 0.04 * prox);
+    warpP = yarnProfile(dist.x, r.x);
+    weftP = yarnProfile(dist.y, r.y);
+  }
 
-  // 원사 프로파일
-  float warpP = yarnProfile(dist.x, r.x);
-  float weftP = yarnProfile(dist.y, r.y);
+  float h;
 
-  // 섬유 방향 기준 위상 (셀 로컬 좌표 기반 — 타일 경계 이음새 제거)
-  float effTwist = u_twistAngle;
-  float twC = cos(effTwist);
-  float twS = sin(effTwist);
-  // 매트릭스 주기로 반복하는 셀 오프셋 (셀 간 위상 변화, 타일링 유지)
-  vec2 mc = mod(cellIdx, u_matrixSize);
-  float warpPhase = f.x * twS + f.y * twC + mc.x * 1.37 + mc.y * 0.73;
-  float weftPhase = f.x * twC + f.y * twS + mc.x * 0.73 + mc.y * 1.37;
+  if (isCarbon) {
+    // ════════════════════════════════════════
+    // 카본: 볼록 dome + 날카로운 에지 + 미세 결
+    // ════════════════════════════════════════
+    float topH = 0.80;
+    float botH = 0.18;
 
-  // 미세 줄무늬 (다중 주파수 합성)
-  float warpS = (sin(warpPhase * 40.0) + sin(warpPhase * 27.0 + 1.7) * 0.5) * 0.008 * warpP;
-  float weftS = (sin(weftPhase * 40.0) + sin(weftPhase * 27.0 + 2.3) * 0.5) * 0.008 * weftP;
+    // warp-over / weft-over
+    float hWarpOver = topH * warpP + botH * weftP * (1.0 - warpP);
+    float hWeftOver = topH * weftP + botH * warpP * (1.0 - weftP);
+    h = mix(hWeftOver, hWarpOver, overFactor);
 
-  // ── 높이 산출 ──
-  float crossing = warpP * weftP;
-  float topBase = mix(0.58, 0.95, crossing);
-  float botBase = mix(0.22, 0.05, crossing);
-  float flatten = 1.0 - u_flattening * crossing;
+    // 카본 섬유 결: 토우 방향 미세 grain (타일링 안전)
+    vec2 mc = mod(cellIdx, u_matrixSize);
+    float warpGrain = sin(f.y * 50.0 + mc.y * 2.91) * 0.012 * warpP;
+    float weftGrain = sin(f.x * 50.0 + mc.x * 2.91) * 0.012 * weftP;
+    h += mix(weftGrain, warpGrain, overFactor);
 
-  // warp-over / weft-over 각각의 최종 height를 독립 계산 후 블렌딩
-  float hw = mix(botBase * weftP + weftS, topBase * warpP * flatten + warpS, smoothstep(0.0, 0.45, warpP));
-  float hf = mix(botBase * warpP + warpS, topBase * weftP * flatten + weftS, smoothstep(0.0, 0.45, weftP));
+    // 토우 사이 날카로운 갭
+    float coverage = max(warpP, weftP);
+    h *= smoothstep(0.0, 0.05, coverage);
 
-  float h = mix(hf, hw, overFactor);
+  } else {
+    // ════════════════════════════════════════
+    // 패브릭: 넓은 blend로 자연스러운 전환
+    // ════════════════════════════════════════
 
-  // ── 경계 크레바스: 상태 전환 경계에서 미세한 골 ──
-  float valleyWidth = 0.12;
-  float valleyX = smoothstep(valleyWidth, 0.0, dBnd.x) * abs(hardOver - nOverX);
-  float valleyY = smoothstep(valleyWidth, 0.0, dBnd.y) * abs(hardOver - nOverY);
-  h -= max(valleyX, valleyY) * 0.04;
+    // ── 섬유 줄무늬 ──
+    float twC = cos(u_twistAngle);
+    float twS = sin(u_twistAngle);
+    vec2 mc = mod(cellIdx, u_matrixSize);
+    float warpPhase = f.x * twS + f.y * twC + mc.x * 1.37 + mc.y * 0.73;
+    float weftPhase = f.x * twC + f.y * twS + mc.x * 0.73 + mc.y * 1.37;
+    float warpS = (sin(warpPhase * 40.0) + sin(warpPhase * 27.0 + 1.7) * 0.5) * 0.007 * warpP;
+    float weftS = (sin(weftPhase * 40.0) + sin(weftPhase * 27.0 + 2.3) * 0.5) * 0.007 * weftP;
 
-  // ── 틈새 함몰: 원사 커버리지 낮은 영역 ──
-  float coverage = max(warpP, weftP);
-  h *= smoothstep(0.0, 0.15, coverage);
+    float crossing = warpP * weftP;
+    float flatten = 1.0 - u_flattening * crossing;
+
+    // ── 종방향 아치: 미세 dome ──
+    float warpTransY = abs(hardOver - nOverY);
+    float warpArch = mix(mix(0.99, 0.93, warpTransY), 1.02, smoothstep(0.0, 0.5, dBnd.y));
+    float weftTransX = abs(hardOver - nOverX);
+    float weftArch = mix(mix(0.99, 0.93, weftTransX), 1.02, smoothstep(0.0, 0.5, dBnd.x));
+
+    // ── 상부/하부 기본 높이 ──
+    float topBase = mix(0.55, 0.90, crossing);
+    float botBase = mix(0.25, 0.08, crossing);
+
+    // ── warp-over / weft-over 높이 (넓은 blend=0.40으로 lip 최소화) ──
+    float hw = mix(
+      botBase * weftP + weftS,
+      topBase * warpP * flatten * warpArch + warpS,
+      smoothstep(0.0, 0.40, warpP)
+    );
+    float hf = mix(
+      botBase * warpP + warpS,
+      topBase * weftP * flatten * weftArch + weftS,
+      smoothstep(0.0, 0.40, weftP)
+    );
+
+    h = mix(hf, hw, overFactor);
+
+    // ── Gap mask ──
+    float coverage = max(warpP, weftP);
+    h *= smoothstep(0.0, 0.12, coverage);
+  }
 
   fragColor = vec4(vec3(clamp(h, 0.0, 1.0)), 1.0);
 }

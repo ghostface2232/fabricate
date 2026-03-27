@@ -109,45 +109,42 @@ export default function SpherePreview3D({ engine, renderVersion }: SpherePreview
     };
   }, []);
 
-  // Material type switch (fabric vs carbon)
+  // Material + Texture 통합 업데이트 (타이밍 불일치 방지)
   useEffect(() => {
+    if (!engine || renderVersion === 0) return;
     const mesh = meshRef.current;
     if (!mesh) return;
 
+    // ── Material type switch (필요 시) ──
     const isCarbon = params.type === 'carbonPlain' || params.type === 'carbonTwill';
     const typeKey = isCarbon ? 'carbon' : 'fabric';
-    if (typeKey === prevTypeRef.current) return;
-    prevTypeRef.current = typeKey;
+    if (typeKey !== prevTypeRef.current) {
+      prevTypeRef.current = typeKey;
+      materialRef.current?.dispose();
 
-    // Dispose old material
-    materialRef.current?.dispose();
+      let mat: THREE.MeshStandardMaterial | THREE.MeshPhysicalMaterial;
+      if (isCarbon) {
+        const glossiness = 'glossiness' in params ? params.glossiness : 0.85;
+        mat = new THREE.MeshPhysicalMaterial({
+          clearcoat: 1.0,
+          clearcoatRoughness: 1.0 - glossiness,
+          anisotropy: 0.5,
+          anisotropyRotation: Math.PI / 4,
+        });
+      } else {
+        mat = new THREE.MeshStandardMaterial();
+      }
 
-    let mat: THREE.MeshStandardMaterial | THREE.MeshPhysicalMaterial;
-    if (isCarbon) {
-      const glossiness = 'glossiness' in params ? params.glossiness : 0.85;
-      mat = new THREE.MeshPhysicalMaterial({
-        clearcoat: 1.0,
-        clearcoatRoughness: 1.0 - glossiness,
-        anisotropy: 0.5,
-        anisotropyRotation: Math.PI / 4,
-      });
-    } else {
-      mat = new THREE.MeshStandardMaterial();
+      materialRef.current = mat;
+      mesh.material = mat;
     }
 
-    materialRef.current = mat;
-    mesh.material = mat;
-  }, [params]);
-
-  // Texture update on render
-  useEffect(() => {
-    if (!engine || renderVersion === 0) return;
     const mat = materialRef.current;
     if (!mat) return;
 
+    // ── Texture update ──
     const renderSize = engine.getRenderSize();
 
-    // 해상도 변경 시 기존 텍스처 폐기 → 새로 생성
     if (renderSize !== prevRenderSizeRef.current) {
       for (const tex of Object.values(texturesRef.current)) tex.dispose();
       texturesRef.current = {};
@@ -159,11 +156,9 @@ export default function SpherePreview3D({ engine, renderVersion }: SpherePreview
 
       let tex = texturesRef.current[mapName];
       if (tex) {
-        // Reuse existing texture, update data
         (tex.image as { data: Uint8Array }).data = pixels;
         tex.needsUpdate = true;
       } else {
-        // Create new DataTexture
         tex = new THREE.DataTexture(
           pixels,
           renderSize,
@@ -190,8 +185,7 @@ export default function SpherePreview3D({ engine, renderVersion }: SpherePreview
     mat.displacementMap = texs['height'];
     mat.displacementScale = 0.02;
 
-    // Sync carbon glossiness → clearcoatRoughness
-    const isCarbon = params.type === 'carbonPlain' || params.type === 'carbonTwill';
+    // Carbon glossiness sync
     if (isCarbon && mat instanceof THREE.MeshPhysicalMaterial) {
       mat.clearcoatRoughness = 1.0 - (params.glossiness ?? 0.85);
     }
