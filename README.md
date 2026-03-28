@@ -1,73 +1,110 @@
-# React + TypeScript + Vite
+# Fabricate
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Fabricate is a browser-based material authoring tool for woven fabrics and carbon fiber.
+It generates a full PBR texture set procedurally from a weave draft and a small set of material controls, with 2D tiling and 3D preview built in.
 
-Currently, two official plugins are available:
+https://ghostface2232.github.io/fabricate/
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## What It Does
 
-## React Compiler
+- Builds woven and carbon-fiber surface patterns from procedural rules instead of bitmap sources
+- Derives the full PBR stack from height as the single source of truth
+- Previews materials as seamless tiles or on a 3D sphere
+- Exports texture maps as PNG for downstream rendering work
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+Current pattern coverage includes:
+- Woven: plain, basket, oxford, twill 2/1, twill 2/2, twill 3/1, broken twill, herringbone, chevron, satin, sateen
+- Carbon: plain and twill
 
-## Expanding the ESLint configuration
+## Why This Exists
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+Textile look-dev usually means picking from a pre-baked texture library or stopping at a flat pattern preview.
+Neither is useful when you need to iterate on structure, density, loft, edge sharpness, gloss response, and color balance at the same time.
+Fabricate covers that gap — quick material exploration in the browser, no round-tripping to external tools.
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+## Highlights
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+- Procedural weave matrix generation on the CPU
+- WebGL2 shader pipeline for height, normal, AO, roughness, and diffuse
+- Three.js preview without React Three Fiber
+- Zustand state model with undo and redo
+- GitHub Pages deployment via Actions
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+## Quick Start
+
+Requirements:
+- Node.js 22 or newer
+- A browser with WebGL2 support
+
+Install and run locally:
+
+```bash
+npm install
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+Create a production build:
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm run build
 ```
+
+Preview the production build locally:
+
+```bash
+npm run preview
+```
+
+## Deployment
+
+The repository includes a GitHub Actions workflow for GitHub Pages.
+Pushes to `main` build the app and publish the contents of `dist/`.
+If you fork the project, make sure the repository Pages source is set to `GitHub Actions`.
+
+## Project Structure
+
+```text
+src/
+  components/   React UI
+  engine/       WebGL2 rendering pipeline and weave generation
+  patterns/     Pattern catalog metadata
+  shaders/      GLSL 300 es shader sources
+  stores/       Zustand state
+  types/        Shared app and engine types
+public/
+  Logo/         App logo and favicon assets
+.github/
+  workflows/    CI and deployment automation
+```
+
+## Architecture Notes
+
+- `src/engine` stays React-free
+- Pattern generation flows through a single `PatternParams` interface
+- Height is the authoritative source for every derived PBR map
+- Weave matrices are generated on the CPU and uploaded as WebGL2 data textures
+
+## Known Constraints
+
+- WebGL2 is required
+- The app is tuned for dark UI only
+- Very large preview resolutions can be GPU-bound on lower-end hardware
+- Vite currently emits a large chunk warning in production builds
+
+## Contributing
+
+Contributions are welcome, especially around:
+- additional weave structures
+- export workflow improvements
+- better mobile ergonomics
+- material response tuning for rendering accuracy
+
+Read [CONTRIBUTING.md](./CONTRIBUTING.md) before opening a pull request.
+
+## Security
+
+For security issues, read [SECURITY.md](./SECURITY.md).
+
+## License
+
+Released under the [MIT License](./LICENSE).
