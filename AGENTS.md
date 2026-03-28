@@ -28,6 +28,8 @@ Procedural하게 생성하고, Full PBR 텍스처 세트를 PNG로 내보내는 
 - WebGL2 네이티브 GLSL 셰이더
 - Zustand 5 (상태 관리)
 - browser-fs-access (외부 파일 입출력)
+- sonner (토스트 알림)
+- JSZip (ZIP 내보내기)
 - OPFS (내부 워크스페이스, 프리셋 저장, 자동 저장)
 
 ## 코드 스타일
@@ -62,9 +64,18 @@ PatternStore:
                  roughnessBase, roughnessVariation, roughnessCavityInfluence }
   exportSettings: { resolution, normalDirection, selectedMaps, filenamePrefix }
 
+## Export 파이프라인
+- TextureExporter(src/engine/): 렌더링 → readPixels → flipVertically → PNG Blob 변환. React 의존성 없음.
+- fileAccess(src/utils/): browser-fs-access 래핑. showDirectoryPicker 지원 시 폴더 저장, 미지원 시 순차 다운로드.
+- ExportDialog(src/components/export/): 해상도·Normal 방향·맵 선택 UI. 진행률 표시.
+- Export 시 엔진을 export 해상도로 렌더링 → 전체 픽셀 동기 읽기 → 프리뷰 해상도 복원 → 비동기 PNG 변환.
+  renderAtResolution()은 픽셀 읽기 전에 복원해버리므로 사용하지 않는다.
+
 ## 주의사항
 - WebGL2 데이터 텍스처(R8)로 매트릭스 업로드 시 UNPACK_ALIGNMENT를 1로 설정해야 한다.
 - FBO 텍스처를 다른 셰이더의 입력으로 쓸 때 같은 FBO에서 동시에 읽고 쓰면 안 된다.
 - readPixels 결과는 Y축이 뒤집혀 있으므로 행 단위로 반전해야 한다.
 - Three.js DataTexture 생성 시 flipY를 false로 설정한다.
 - Normal Map 생성 시 texelSize를 반드시 1.0 / 렌더 해상도로 계산한다.
+- Normal Map 내보내기 시 flipVertically 후 R(X)·G(Y) 채널 보정이 필요하다.
+  OpenGL: R·G 모두 반전, DirectX: R만 반전. (WebGL UV 공간 → 이미지 공간 좌표계 차이)
