@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
 import { useHistoryStore } from '@/stores/historyStore';
@@ -6,6 +6,7 @@ import { Download, Undo2, Redo2 } from 'lucide-react';
 import PatternTypeSelector from '@/components/panels/PatternTypeSelector';
 import ParamControlPanel from '@/components/panels/ParamControlPanel';
 import PreviewContainer from '@/components/preview/PreviewContainer';
+import ExportDialog from '@/components/export/ExportDialog';
 import type { PatternEngine } from '@/engine/PatternEngine';
 
 interface AppLayoutProps {
@@ -21,6 +22,7 @@ export default function AppLayout({
   lastColorOnly,
   isRendering,
 }: AppLayoutProps) {
+  const [exportOpen, setExportOpen] = useState(false);
   const undo = useHistoryStore((s) => s.undo);
   const redo = useHistoryStore((s) => s.redo);
   const canUndo = useHistoryStore((s) => s.undoStack.length > 0);
@@ -83,7 +85,11 @@ export default function AppLayout({
               <Redo2 className="w-3.5 h-3.5" />
             </Button>
           </div>
-          <Button size="sm" className="h-7 text-xs gap-1.5">
+          <Button
+            size="sm"
+            className="h-7 text-xs gap-1.5"
+            onClick={() => setExportOpen(true)}
+          >
             <Download className="w-3.5 h-3.5" />
             Export
           </Button>
@@ -137,6 +143,12 @@ export default function AppLayout({
           </ScrollArea>
         </div>
       </div>
+
+      <ExportDialog
+        open={exportOpen}
+        onOpenChange={setExportOpen}
+        engine={engine}
+      />
     </div>
   );
 }
