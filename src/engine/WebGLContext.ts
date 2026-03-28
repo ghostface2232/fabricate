@@ -7,7 +7,9 @@ const DEV = import.meta.env.DEV;
 
 function glCheck(gl: WebGL2RenderingContext, label: string): void {
   if (!DEV) return;
+  if (gl.isContextLost()) return;
   const err = gl.getError();
+  if (err === gl.CONTEXT_LOST_WEBGL) return;
   if (err !== gl.NO_ERROR) {
     throw new Error(`[WebGLContext] GL error after ${label}: 0x${err.toString(16)}`);
   }
@@ -94,7 +96,7 @@ export class WebGLContext {
   /**
    * 데이터 텍스처 생성.
    * R8 포맷 사용 시 UNPACK_ALIGNMENT=1 설정.
-   * CLAMP_TO_EDGE + LINEAR 필터.
+   * REPEAT + NEAREST 필터.
    */
   createDataTexture(
     data: Uint8Array,
@@ -138,8 +140,8 @@ export class WebGLContext {
       );
     }
 
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
 
@@ -150,6 +152,7 @@ export class WebGLContext {
 
   /** 컨텍스트 해제 */
   dispose(): void {
+    if (this.gl.isContextLost()) return;
     this.loseCtx?.loseContext();
   }
 }

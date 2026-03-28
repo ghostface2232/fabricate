@@ -9,7 +9,9 @@ const DEV = import.meta.env.DEV;
 
 function glCheck(gl: WebGL2RenderingContext, label: string): void {
   if (!DEV) return;
+  if (gl.isContextLost()) return;
   const err = gl.getError();
+  if (err === gl.CONTEXT_LOST_WEBGL) return;
   if (err !== gl.NO_ERROR) {
     throw new Error(`[RenderTarget] GL error after ${label}: 0x${err.toString(16)}`);
   }
@@ -111,9 +113,15 @@ export class RenderTarget {
   readPixels(): Uint8Array {
     const { gl } = this;
     const data = new Uint8Array(this._width * this._height * 4);
+    if (gl.isContextLost()) {
+      return data;
+    }
     gl.bindFramebuffer(gl.FRAMEBUFFER, this.fbo);
     gl.readPixels(0, 0, this._width, this._height, gl.RGBA, gl.UNSIGNED_BYTE, data);
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    if (gl.isContextLost()) {
+      return data;
+    }
     glCheck(gl, 'readPixels');
     return data;
   }
@@ -137,6 +145,7 @@ export class RenderTarget {
   /** 내부 리소스 삭제 */
   private deleteResources(): void {
     const { gl } = this;
+    if (gl.isContextLost()) return;
     gl.deleteFramebuffer(this.fbo);
     gl.deleteTexture(this.texture);
   }

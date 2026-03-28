@@ -10,6 +10,7 @@ uniform float u_flattening;
 uniform float u_edgeDefinition;
 uniform float u_yarnLoft;
 uniform float u_gapWidth;
+uniform float u_repeatUnit;
 uniform int u_patternType;  // 0-2: fabric, 3-4: carbon
 
 in vec2 v_uv;
@@ -19,6 +20,17 @@ const int MAX_FLOAT_SEARCH_STEPS = 24;
 
 float saturate(float x) {
   return clamp(x, 0.0, 1.0);
+}
+
+float wrapRepeat(float value, float repeat) {
+  return mod(mod(value, repeat) + repeat, repeat);
+}
+
+vec2 wrapRepeat(vec2 value, float repeat) {
+  return vec2(
+    wrapRepeat(value.x, repeat),
+    wrapRepeat(value.y, repeat)
+  );
 }
 
 float sampleWeave(vec2 cellIdx) {
@@ -198,17 +210,17 @@ float carbonFiberDetail(float alongPhase, float acrossCoord, float visibleMask, 
 }
 
 void main() {
-  float density = max(u_matrixSize.x, round(u_density / u_matrixSize.x) * u_matrixSize.x);
-  vec2 tiledUV = v_uv * density;
+  float density = max(u_repeatUnit, round(u_density / u_repeatUnit) * u_repeatUnit);
+  vec2 tiledUV = fract(v_uv) * density;
   float rawShear = sin(u_twistAngle);
-  float shear = round(rawShear * density / u_matrixSize.x) * u_matrixSize.x / density;
+  float shear = round(rawShear * density / u_repeatUnit) * u_repeatUnit / density;
   float carbonFactor = u_patternType >= 3 ? 1.0 : 0.0;
   float cellScale = weaveCellScale();
 
-  vec2 sh = vec2(
+  vec2 sh = wrapRepeat(vec2(
     tiledUV.x + tiledUV.y * shear,
     tiledUV.y + tiledUV.x * shear
-  );
+  ), density);
   vec2 gridSh = sh / cellScale;
   vec2 cellIdx = floor(gridSh);
   vec2 f = fract(gridSh);

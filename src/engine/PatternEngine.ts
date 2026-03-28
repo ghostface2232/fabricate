@@ -20,12 +20,36 @@ import diffuseFrag from '@/shaders/diffuse.frag?raw';
 
 const RENDER_SIZE = 512;
 
+function gcd(a: number, b: number): number {
+  a = Math.abs(a);
+  b = Math.abs(b);
+  while (b !== 0) {
+    [a, b] = [b, a % b];
+  }
+  return a || 1;
+}
+
+function lcm(a: number, b: number): number {
+  return Math.abs(a * b) / gcd(a, b);
+}
+
 /** 패턴 타입 → 정수 인코딩 (셰이더 u_patternType) */
 function patternTypeToInt(type: PatternParams['type']): number {
   switch (type) {
-    case 'plainWeave':  return 0;
-    case 'twillWeave':  return 1;
-    case 'satinWeave':  return 2;
+    case 'plainWeave':
+    case 'basketWeave':
+    case 'oxfordWeave':
+    case 'twillWeave21':
+    case 'twillWeave':
+    case 'twillWeave31':
+    case 'brokenTwillWeave22':
+    case 'brokenTwillWeave31':
+    case 'herringboneWeave':
+    case 'chevronWeave':
+    case 'satinWeave':
+    case 'satinWeave8':
+    case 'sateenWeave':
+      return 0;
     case 'carbonPlain': return 3;
     case 'carbonTwill': return 4;
   }
@@ -147,6 +171,7 @@ export class PatternEngine {
     const edgeDefinition = params.edgeDefinition;
     const yarnLoft = params.yarnLoft;
     const typeInt = patternTypeToInt(params.type);
+    const repeatUnit = lcm(weaveResult.width, weaveResult.height);
     const texelSize: [number, number] = [1.0 / this.currentSize, 1.0 / this.currentSize];
 
     // ── Pass 1: Height ──
@@ -163,10 +188,11 @@ export class PatternEngine {
     this.heightShader.setUniform('u_edgeDefinition', edgeDefinition);
     this.heightShader.setUniform('u_yarnLoft', yarnLoft);
     this.heightShader.setUniform('u_gapWidth', 'gapWidth' in params ? params.gapWidth : 0);
+    this.heightShader.setUniform('u_repeatUnit', repeatUnit);
 
     this.heightShader.setUniformInt('u_patternType', typeInt);
 
-    if (params.type === 'plainWeave' || params.type === 'twillWeave' || params.type === 'satinWeave') {
+    if ('twistAngle' in params) {
       this.heightShader.setUniform('u_twistAngle', params.twistAngle * (Math.PI / 180));
     } else {
       this.heightShader.setUniform('u_twistAngle', 0);
@@ -225,13 +251,14 @@ export class PatternEngine {
     this.roughnessShader.setUniform('u_edgeDefinition', edgeDefinition);
     this.roughnessShader.setUniform('u_yarnLoft', yarnLoft);
     this.roughnessShader.setUniform('u_gapWidth', 'gapWidth' in params ? params.gapWidth : 0);
+    this.roughnessShader.setUniform('u_repeatUnit', repeatUnit);
     this.roughnessShader.setUniform('u_roughnessBase', pbrSettings.roughnessBase);
     this.roughnessShader.setUniform('u_roughnessVariation', pbrSettings.roughnessVariation);
     this.roughnessShader.setUniform('u_cavityInfluence', pbrSettings.roughnessCavityInfluence);
     this.roughnessShader.setUniform('u_glossiness', 'glossiness' in params ? params.glossiness : 0);
     this.roughnessShader.setUniformInt('u_patternType', typeInt);
 
-    if (params.type === 'plainWeave' || params.type === 'twillWeave' || params.type === 'satinWeave') {
+    if ('twistAngle' in params) {
       this.roughnessShader.setUniform('u_twistAngle', params.twistAngle * (Math.PI / 180));
     } else {
       this.roughnessShader.setUniform('u_twistAngle', 0);
@@ -257,16 +284,17 @@ export class PatternEngine {
     this.diffuseShader.setUniform('u_edgeDefinition', edgeDefinition);
     this.diffuseShader.setUniform('u_yarnLoft', yarnLoft);
     this.diffuseShader.setUniform('u_gapWidth', 'gapWidth' in params ? params.gapWidth : 0);
+    this.diffuseShader.setUniform('u_repeatUnit', repeatUnit);
     this.diffuseShader.setUniformInt('u_patternType', typeInt);
 
-    if (params.type === 'plainWeave' || params.type === 'twillWeave' || params.type === 'satinWeave') {
+    if ('twistAngle' in params) {
       this.diffuseShader.setUniform('u_twistAngle', params.twistAngle * (Math.PI / 180));
     } else {
       this.diffuseShader.setUniform('u_twistAngle', 0);
     }
 
     // 컬러 설정: fabric → warpColor/weftColor, carbon → fiberColor/resinColor
-    if (params.type === 'plainWeave' || params.type === 'twillWeave' || params.type === 'satinWeave') {
+    if ('warpColor' in params) {
       this.diffuseShader.setUniform('u_color1', params.warpColor);
       this.diffuseShader.setUniform('u_color2', params.weftColor);
     } else {
@@ -300,15 +328,16 @@ export class PatternEngine {
     this.diffuseShader.setUniform('u_edgeDefinition', params.edgeDefinition);
     this.diffuseShader.setUniform('u_yarnLoft', params.yarnLoft);
     this.diffuseShader.setUniform('u_gapWidth', 'gapWidth' in params ? params.gapWidth : 0);
+    this.diffuseShader.setUniform('u_repeatUnit', lcm(this.lastMatrixWidth, this.lastMatrixHeight));
     this.diffuseShader.setUniformInt('u_patternType', patternTypeToInt(params.type));
 
-    if (params.type === 'plainWeave' || params.type === 'twillWeave' || params.type === 'satinWeave') {
+    if ('twistAngle' in params) {
       this.diffuseShader.setUniform('u_twistAngle', params.twistAngle * (Math.PI / 180));
     } else {
       this.diffuseShader.setUniform('u_twistAngle', 0);
     }
 
-    if (params.type === 'plainWeave' || params.type === 'twillWeave' || params.type === 'satinWeave') {
+    if ('warpColor' in params) {
       this.diffuseShader.setUniform('u_color1', params.warpColor);
       this.diffuseShader.setUniform('u_color2', params.weftColor);
     } else {

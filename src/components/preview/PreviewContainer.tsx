@@ -32,7 +32,6 @@ interface PreviewContainerProps {
 export default function PreviewContainer({ engine, renderVersion, lastColorOnly }: PreviewContainerProps) {
   const commit = useHistoryStore((s) => s.commit);
   const previewResolution = usePatternStore((s) => s.previewResolution);
-  const patternType = usePatternStore((s) => s.params.type);
   const _setRes = usePatternStore((s) => s.setPreviewResolution);
   const setPreviewResolution = (r: number) => commit(() => _setRes(r));
 
@@ -158,7 +157,6 @@ export default function PreviewContainer({ engine, renderVersion, lastColorOnly 
             />
           ) : (
             <SpherePreview3D
-              key={patternType}
               engine={engine}
               renderVersion={renderVersion}
             />

@@ -3,10 +3,63 @@
 /** 지원하는 패턴 종류 */
 export type PatternType =
   | 'plainWeave'
+  | 'basketWeave'
+  | 'oxfordWeave'
+  | 'twillWeave21'
   | 'twillWeave'
+  | 'twillWeave31'
+  | 'brokenTwillWeave22'
+  | 'brokenTwillWeave31'
+  | 'herringboneWeave'
+  | 'chevronWeave'
   | 'satinWeave'
+  | 'satinWeave8'
+  | 'sateenWeave'
   | 'carbonPlain'
   | 'carbonTwill';
+
+export type WeavePatternType = Exclude<PatternType, 'carbonPlain' | 'carbonTwill'>;
+export type CarbonPatternType = Extract<PatternType, 'carbonPlain' | 'carbonTwill'>;
+
+export const WEAVE_PATTERN_TYPES: WeavePatternType[] = [
+  'plainWeave',
+  'basketWeave',
+  'oxfordWeave',
+  'twillWeave21',
+  'twillWeave',
+  'twillWeave31',
+  'brokenTwillWeave22',
+  'brokenTwillWeave31',
+  'herringboneWeave',
+  'chevronWeave',
+  'satinWeave',
+  'satinWeave8',
+  'sateenWeave',
+];
+
+export function isCarbonPatternType(type: PatternType): type is CarbonPatternType {
+  return type === 'carbonPlain' || type === 'carbonTwill';
+}
+
+export function isWeavePatternType(type: PatternType): type is WeavePatternType {
+  return !isCarbonPatternType(type);
+}
+
+export function isTwillFamilyPatternType(type: PatternType): boolean {
+  return (
+    type === 'twillWeave21' ||
+    type === 'twillWeave' ||
+    type === 'twillWeave31' ||
+    type === 'brokenTwillWeave22' ||
+    type === 'brokenTwillWeave31' ||
+    type === 'herringboneWeave' ||
+    type === 'chevronWeave'
+  );
+}
+
+export function isSatinFamilyPatternType(type: PatternType): boolean {
+  return type === 'satinWeave' || type === 'satinWeave8' || type === 'sateenWeave';
+}
 
 // ─── Weave Params ────────────────────────────────────────────
 
@@ -69,8 +122,18 @@ export interface CarbonParams {
 /** 판별 유니온 — type 필드로 WeaveParams / CarbonParams 구분 */
 export type PatternParams =
   | ({ type: 'plainWeave' } & WeaveParams)
+  | ({ type: 'basketWeave' } & WeaveParams)
+  | ({ type: 'oxfordWeave' } & WeaveParams)
+  | ({ type: 'twillWeave21' } & WeaveParams)
   | ({ type: 'twillWeave' } & WeaveParams)
+  | ({ type: 'twillWeave31' } & WeaveParams)
+  | ({ type: 'brokenTwillWeave22' } & WeaveParams)
+  | ({ type: 'brokenTwillWeave31' } & WeaveParams)
+  | ({ type: 'herringboneWeave' } & WeaveParams)
+  | ({ type: 'chevronWeave' } & WeaveParams)
   | ({ type: 'satinWeave' } & WeaveParams)
+  | ({ type: 'satinWeave8' } & WeaveParams)
+  | ({ type: 'sateenWeave' } & WeaveParams)
   | ({ type: 'carbonPlain' } & CarbonParams)
   | ({ type: 'carbonTwill' } & CarbonParams);
 
@@ -117,20 +180,6 @@ export interface ExportSettings {
 
 /** 지원하는 PBR 맵 종류 */
 export type PBRMapType = 'height' | 'normal' | 'ao' | 'roughness' | 'diffuse';
-
-// ─── Preset ──────────────────────────────────────────────────
-
-/** 저장 가능한 프리셋 */
-export interface Preset {
-  id: string;
-  name: string;
-  params: PatternParams;
-  pbrSettings: PBRSettings;
-  /** 생성 시각 (epoch ms) */
-  createdAt: number;
-  /** 수정 시각 (epoch ms) */
-  updatedAt: number;
-}
 
 // ─── Weave Matrix Result ─────────────────────────────────────
 

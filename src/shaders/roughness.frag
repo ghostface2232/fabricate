@@ -12,6 +12,7 @@ uniform float u_flattening;
 uniform float u_edgeDefinition;
 uniform float u_yarnLoft;
 uniform float u_gapWidth;
+uniform float u_repeatUnit;
 uniform float u_roughnessBase;
 uniform float u_roughnessVariation;
 uniform float u_cavityInfluence;
@@ -22,6 +23,17 @@ in vec2 v_uv;
 out vec4 fragColor;
 
 const int MAX_FLOAT_SEARCH_STEPS = 24;
+
+float wrapRepeat(float value, float repeat) {
+  return mod(mod(value, repeat) + repeat, repeat);
+}
+
+vec2 wrapRepeat(vec2 value, float repeat) {
+  return vec2(
+    wrapRepeat(value.x, repeat),
+    wrapRepeat(value.y, repeat)
+  );
+}
 
 float sampleH(vec2 offset) {
   return texture(u_heightMap, mod(v_uv + offset * u_texelSize, 1.0)).r;
@@ -167,14 +179,14 @@ void main() {
   float height = sampleH(vec2(0.0));
   float carbonFactor = u_patternType >= 3 ? 1.0 : 0.0;
 
-  float density = max(u_matrixSize.x, round(u_density / u_matrixSize.x) * u_matrixSize.x);
-  vec2 tiledUV = v_uv * density;
+  float density = max(u_repeatUnit, round(u_density / u_repeatUnit) * u_repeatUnit);
+  vec2 tiledUV = fract(v_uv) * density;
   float rawShear = sin(u_twistAngle);
-  float shear = round(rawShear * density / u_matrixSize.x) * u_matrixSize.x / density;
-  vec2 sh = vec2(
+  float shear = round(rawShear * density / u_repeatUnit) * u_repeatUnit / density;
+  vec2 sh = wrapRepeat(vec2(
     tiledUV.x + tiledUV.y * shear,
     tiledUV.y + tiledUV.x * shear
-  );
+  ), density);
   float cellScale = weaveCellScale();
   vec2 gridSh = sh / cellScale;
   vec2 cellIdx = floor(gridSh);

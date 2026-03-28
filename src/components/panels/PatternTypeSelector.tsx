@@ -1,26 +1,9 @@
 import { usePatternStore } from '@/stores/patternStore';
 import { useHistoryStore } from '@/stores/historyStore';
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Label } from '@/components/ui/label';
+import { cn } from '@/lib/utils';
+import { PATTERN_CATEGORIES } from '@/patterns/patternCatalog';
 import type { PatternType } from '@/types/pattern';
-
-const CATEGORIES = [
-  {
-    label: 'Woven',
-    items: [
-      { value: 'plainWeave' as PatternType, label: 'Plain Weave' },
-      { value: 'twillWeave' as PatternType, label: 'Twill 2/2' },
-      { value: 'satinWeave' as PatternType, label: 'Satin 5H' },
-    ],
-  },
-  {
-    label: 'Carbon',
-    items: [
-      { value: 'carbonPlain' as PatternType, label: 'Carbon Plain' },
-      { value: 'carbonTwill' as PatternType, label: 'Carbon Twill' },
-    ],
-  },
-];
 
 export default function PatternTypeSelector() {
   const patternType = usePatternStore((s) => s.params.type);
@@ -30,35 +13,34 @@ export default function PatternTypeSelector() {
 
   return (
     <div className="space-y-4">
-      {CATEGORIES.map((cat) => (
-        <div key={cat.label} className="space-y-2.5">
-          <Label className="text-zinc-400">{cat.label}</Label>
-          <ToggleGroup
-            type="single"
-            value={patternType}
-            onValueChange={(v) => {
-              if (v) setPatternType(v as PatternType);
-            }}
-            className="flex"
-          >
-            {cat.items.map((item, i) => (
-              <ToggleGroupItem
+      {PATTERN_CATEGORIES.map((category) => (
+        <div key={category.label} className="space-y-2.5">
+          <div className="flex items-center justify-between">
+            <Label className="text-zinc-400">{category.label}</Label>
+            <span className="text-[10px] uppercase tracking-[0.16em] text-zinc-500">
+              {category.items.length}
+            </span>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            {category.items.map((item) => (
+              <button
                 key={item.value}
-                value={item.value}
-                size="sm"
-                variant="outline"
-                className={`text-xs h-7 px-3 ${
-                  i === 0
-                    ? 'rounded-r-none'
-                    : i === cat.items.length - 1
-                      ? 'rounded-l-none border-l-0'
-                      : 'rounded-none border-l-0'
-                }`}
+                type="button"
+                onClick={() => setPatternType(item.value as PatternType)}
+                className={cn(
+                  'rounded-lg border px-3 py-2 text-left transition-colors',
+                  patternType === item.value
+                    ? 'border-zinc-500 bg-zinc-800 text-zinc-50'
+                    : 'border-zinc-800 bg-zinc-900/60 text-zinc-300 hover:border-zinc-700 hover:bg-zinc-900',
+                )}
               >
-                {item.label}
-              </ToggleGroupItem>
+                <div className="pt-1 text-sm font-medium leading-4">{item.label}</div>
+                <div className="mt-1 text-[9px] font-mono uppercase tracking-[0.06em] text-zinc-500">
+                  {item.structure}
+                </div>
+              </button>
             ))}
-          </ToggleGroup>
+          </div>
         </div>
       ))}
     </div>

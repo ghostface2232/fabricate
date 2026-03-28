@@ -30,6 +30,18 @@ function nearestCoprime(n: number, target: number): number {
   return 2; // fallback (n=5일 때 2는 항상 서로소)
 }
 
+function normalizeOffset(offset: number, size: number): number {
+  return ((offset % size) + size) % size;
+}
+
+function invertMatrix(result: WeaveMatrixResult): WeaveMatrixResult {
+  const matrix = new Uint8Array(result.matrix.length);
+  for (let i = 0; i < result.matrix.length; i++) {
+    matrix[i] = result.matrix[i] ? 0 : 1;
+  }
+  return { matrix, width: result.width, height: result.height };
+}
+
 // ─── 패턴별 생성 ─────────────────────────────────────────────
 
 /** 평직: 체커보드 2×2 */
@@ -44,28 +56,80 @@ function generatePlainWeave(): WeaveMatrixResult {
   return { matrix, width: size, height: size };
 }
 
-/**
- * 능직: repeatSize × repeatSize, 2/2 구조.
- * 각 행에서 연속 2칸이 1, 나머지 0.
- * twillDirection 1이면 Z능직(오른쪽 시프트), -1이면 S능직(왼쪽 시프트).
- */
-function generateTwillWeave(
-  repeatSize: number,
-  twillDirection: 1 | -1,
-): WeaveMatrixResult {
-  const size = repeatSize;
-  const half = Math.floor(size / 2);
-  const matrix = new Uint8Array(size * size);
+/** 바스켓 계열: warp/pick 그룹이 plain weave처럼 교차한다. */
+function generateBasketWeave(warpGroup: number, pickGroup: number): WeaveMatrixResult {
+  const width = warpGroup * 2;
+  const height = pickGroup * 2;
+  const matrix = new Uint8Array(width * height);
 
-  for (let y = 0; y < size; y++) {
-    // twillDirection=1: 행마다 시작 위치가 +1(오른쪽), -1: -1(왼쪽)
-    const offset = ((y * twillDirection) % size + size) % size;
-    for (let i = 0; i < half; i++) {
-      const x = (offset + i) % size;
-      matrix[y * size + x] = 1;
+  for (let y = 0; y < height; y++) {
+    const groupY = Math.floor(y / pickGroup);
+    for (let x = 0; x < width; x++) {
+      const groupX = Math.floor(x / warpGroup);
+      matrix[y * width + x] = (groupX + groupY) % 2;
     }
   }
-  return { matrix, width: size, height: size };
+
+  return { matrix, width, height };
+}
+
+function generatePatternFromRowOffsets(
+  width: number,
+  rowOffsets: number[],
+  overCount: number,
+  direction: 1 | -1,
+): WeaveMatrixResult {
+  const height = rowOffsets.length;
+  const matrix = new Uint8Array(width * height);
+
+  for (let y = 0; y < height; y++) {
+    const offset = normalizeOffset(direction === 1 ? rowOffsets[y] : -rowOffsets[y], width);
+    for (let i = 0; i < overCount; i++) {
+      const x = (offset + i) % width;
+      matrix[y * width + x] = 1;
+    }
+  }
+
+  return { matrix, width, height };
+}
+
+/**
+ * 능직: overCount / underCount 구조.
+ * 각 행의 시작 오프셋이 한 칸씩 이동하며 사선 결을 만든다.
+ */
+function generateTwillWeave(
+  overCount: number,
+  underCount: number,
+  twillDirection: 1 | -1,
+): WeaveMatrixResult {
+  const size = overCount + underCount;
+  return generatePatternFromRowOffsets(
+    size,
+    Array.from({ length: size }, (_, i) => i),
+    overCount,
+    twillDirection,
+  );
+}
+
+/** broken twill: 한 row를 out-of-sequence로 밀어 사선이 끊기게 만든다. */
+function generateBrokenTwillWeave(
+  overCount: number,
+  underCount: number,
+  twillDirection: 1 | -1,
+): WeaveMatrixResult {
+  const size = overCount + underCount;
+  const rowOffsets = size === 4 ? [0, 1, 3, 2] : Array.from({ length: size }, (_, i) => i);
+  return generatePatternFromRowOffsets(size, rowOffsets, overCount, twillDirection);
+}
+
+/** chevron/pointed twill: 방향이 포인트에서 반전된다. */
+function generateChevronWeave(twillDirection: 1 | -1): WeaveMatrixResult {
+  return generatePatternFromRowOffsets(4, [0, 1, 2, 3, 2, 1, 0, 3], 2, twillDirection);
+}
+
+/** herringbone: 방향 반전 시 offset break를 둬 chevron보다 부드럽게 꺾인다. */
+function generateHerringboneWeave(twillDirection: 1 | -1): WeaveMatrixResult {
+  return generatePatternFromRowOffsets(4, [0, 1, 2, 3, 0, 3, 2, 1], 2, twillDirection);
 }
 
 /**
@@ -143,10 +207,30 @@ export function generateWeaveMatrix(params: PatternParams): WeaveMatrixResult {
   switch (params.type) {
     case 'plainWeave':
       return generatePlainWeave();
+    case 'basketWeave':
+      return generateBasketWeave(2, 2);
+    case 'oxfordWeave':
+      return generateBasketWeave(2, 1);
+    case 'twillWeave21':
+      return generateTwillWeave(2, 1, params.twillDirection);
     case 'twillWeave':
-      return generateTwillWeave(params.repeatSize, params.twillDirection);
+      return generateTwillWeave(2, 2, params.twillDirection);
+    case 'twillWeave31':
+      return generateTwillWeave(3, 1, params.twillDirection);
+    case 'brokenTwillWeave22':
+      return generateBrokenTwillWeave(2, 2, params.twillDirection);
+    case 'brokenTwillWeave31':
+      return generateBrokenTwillWeave(3, 1, params.twillDirection);
+    case 'herringboneWeave':
+      return generateHerringboneWeave(params.twillDirection);
+    case 'chevronWeave':
+      return generateChevronWeave(params.twillDirection);
     case 'satinWeave':
       return generateSatinWeave(params.repeatSize, params.satinShift);
+    case 'satinWeave8':
+      return generateSatinWeave(params.repeatSize, params.satinShift);
+    case 'sateenWeave':
+      return invertMatrix(generateSatinWeave(params.repeatSize, params.satinShift));
     case 'carbonPlain':
       return generateCarbonPlain(params.towK);
     case 'carbonTwill':

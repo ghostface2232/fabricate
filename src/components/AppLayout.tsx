@@ -1,16 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useEffect } from 'react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { usePatternStore } from '@/stores/patternStore';
 import { useHistoryStore } from '@/stores/historyStore';
-import { defaultPresets } from '@/presets/defaultPresets';
-import { Download, ChevronDown, Undo2, Redo2 } from 'lucide-react';
+import { Download, Undo2, Redo2 } from 'lucide-react';
 import PatternTypeSelector from '@/components/panels/PatternTypeSelector';
 import ParamControlPanel from '@/components/panels/ParamControlPanel';
 import PreviewContainer from '@/components/preview/PreviewContainer';
@@ -29,15 +21,10 @@ export default function AppLayout({
   lastColorOnly,
   isRendering,
 }: AppLayoutProps) {
-  const commit = useHistoryStore((s) => s.commit);
   const undo = useHistoryStore((s) => s.undo);
   const redo = useHistoryStore((s) => s.redo);
   const canUndo = useHistoryStore((s) => s.undoStack.length > 0);
   const canRedo = useHistoryStore((s) => s.redoStack.length > 0);
-
-  const _loadPreset = usePatternStore((s) => s.loadPreset);
-  const loadPreset: typeof _loadPreset = (p) => commit(() => _loadPreset(p));
-  const [presetName, setPresetName] = useState('');
 
   // ── Keyboard shortcuts: Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y ──
   useEffect(() => {
@@ -93,28 +80,6 @@ export default function AppLayout({
               <Redo2 className="w-3.5 h-3.5" />
             </Button>
           </div>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="h-7 text-xs gap-1">
-                {presetName || 'Presets'}
-                <ChevronDown className="w-3 h-3" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              {defaultPresets.map((p) => (
-                <DropdownMenuItem
-                  key={p.id}
-                  onClick={() => {
-                    loadPreset(p);
-                    setPresetName(p.name);
-                  }}
-                  className="text-xs"
-                >
-                  {p.name}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
           <Button size="sm" className="h-7 text-xs gap-1.5">
             <Download className="w-3.5 h-3.5" />
             Export
@@ -122,15 +87,16 @@ export default function AppLayout({
         </div>
       </header>
 
-      {/* ── Body: 2-column ── */}
+      {/* ── Body: 3-column ── */}
       <div className="flex flex-1 min-h-0">
-        {/* Left Panel */}
-        <div className="w-[300px] shrink-0 border-r border-zinc-800 bg-zinc-900/60">
+        {/* Left Panel: Pattern */}
+        <div className="w-[320px] shrink-0 border-r border-zinc-800 bg-zinc-900/60">
           <ScrollArea className="h-full">
-            <div className="p-5 space-y-7">
+            <div className="p-5 space-y-4">
+              <div className="text-[10px] uppercase tracking-[0.18em] text-zinc-500">
+                Pattern
+              </div>
               <PatternTypeSelector />
-              <div className="border-t border-zinc-800" />
-              <ParamControlPanel />
             </div>
           </ScrollArea>
         </div>
@@ -153,6 +119,19 @@ export default function AppLayout({
               </div>
             </div>
           )}
+        </div>
+
+        {/* Right Panel: Settings */}
+        <div className="w-[320px] shrink-0 border-l border-zinc-800 bg-zinc-900/60">
+          <ScrollArea className="h-full">
+            <div className="p-5 space-y-4">
+              <div className="text-[10px] uppercase tracking-[0.18em] text-zinc-500">
+                Parameters
+              </div>
+              <div className="border-t border-zinc-800" />
+              <ParamControlPanel />
+            </div>
+          </ScrollArea>
         </div>
       </div>
     </div>

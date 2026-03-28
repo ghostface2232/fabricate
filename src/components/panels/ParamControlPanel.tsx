@@ -14,6 +14,10 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { ChevronDown, ChevronRight } from 'lucide-react';
+import {
+  isSatinFamilyPatternType,
+  isTwillFamilyPatternType,
+} from '@/types/pattern';
 
 function InlineValue({
   value,
@@ -131,24 +135,22 @@ export default function ParamControlPanel() {
   const updatePBRSettings: typeof _upbr = (p) => commit(() => _upbr(p));
   const [pbrOpen, setPbrOpen] = useState(false);
 
-  const isWeave =
-    params.type === 'plainWeave' ||
-    params.type === 'twillWeave' ||
-    params.type === 'satinWeave';
+  const weaveParams = 'warpColor' in params ? params : null;
+  const carbonParams = 'fiberColor' in params ? params : null;
 
   return (
     <div className="space-y-6">
       {/* ── 색상 ── */}
-      {isWeave ? (
+      {weaveParams ? (
         <div className="space-y-4">
           <ColorField
             label="Warp Color"
-            value={params.warpColor}
+            value={weaveParams.warpColor}
             onChange={(v) => updateParams({ warpColor: v })}
           />
           <ColorField
             label="Weft Color"
-            value={params.weftColor}
+            value={weaveParams.weftColor}
             onChange={(v) => updateParams({ weftColor: v })}
           />
         </div>
@@ -156,12 +158,12 @@ export default function ParamControlPanel() {
         <div className="space-y-4">
           <ColorField
             label="Fiber Color"
-            value={params.fiberColor}
+            value={carbonParams!.fiberColor}
             onChange={(v) => updateParams({ fiberColor: v })}
           />
           <ColorField
             label="Resin Color"
-            value={params.resinColor}
+            value={carbonParams!.resinColor}
             onChange={(v) => updateParams({ resinColor: v })}
           />
         </div>
@@ -214,13 +216,13 @@ export default function ParamControlPanel() {
       </div>
 
       {/* ── Weave 전용 ── */}
-      {isWeave && (
+      {weaveParams && (
         <>
           <Separator className="bg-zinc-800" />
           <div className="space-y-5">
             <SliderRow
               label="Twist"
-              value={params.twistAngle}
+              value={weaveParams.twistAngle}
               min={0}
               max={40}
               step={1}
@@ -231,14 +233,14 @@ export default function ParamControlPanel() {
       )}
 
       {/* ── 능직 전용 ── */}
-      {params.type === 'twillWeave' && (
+      {weaveParams && isTwillFamilyPatternType(params.type) && (
         <>
           <Separator className="bg-zinc-800" />
           <div className="space-y-2.5">
             <Label className="text-zinc-400">Direction</Label>
             <ToggleGroup
               type="single"
-              value={String(params.twillDirection)}
+              value={String(weaveParams.twillDirection)}
               onValueChange={(v) => {
                 if (v) updateParams({ twillDirection: Number(v) as 1 | -1 });
               }}
@@ -256,13 +258,13 @@ export default function ParamControlPanel() {
       )}
 
       {/* ── 수자직 전용 ── */}
-      {params.type === 'satinWeave' && (
+      {weaveParams && isSatinFamilyPatternType(params.type) && (
         <>
           <Separator className="bg-zinc-800" />
           <div className="space-y-5">
             <SliderRow
               label="Repeat Size"
-              value={params.repeatSize}
+              value={weaveParams.repeatSize}
               min={5}
               max={8}
               step={1}
@@ -270,9 +272,9 @@ export default function ParamControlPanel() {
             />
             <SliderRow
               label="Satin Shift"
-              value={params.satinShift}
+              value={weaveParams.satinShift}
               min={2}
-              max={params.repeatSize - 1}
+              max={weaveParams.repeatSize - 1}
               step={1}
               onChange={(v) => updateParams({ satinShift: v })}
             />
@@ -281,14 +283,14 @@ export default function ParamControlPanel() {
       )}
 
       {/* ── Carbon 전용 ── */}
-      {!isWeave && (
+      {carbonParams && (
         <>
           <Separator className="bg-zinc-800" />
           <div className="space-y-5">
             <div className="space-y-2.5">
               <Label className="text-zinc-400">Tow Size</Label>
               <Select
-                value={String(params.towK)}
+                value={String(carbonParams.towK)}
                 onValueChange={(v) => updateParams({ towK: Number(v) as 1 | 3 | 6 })}
               >
                 <SelectTrigger className="h-8 text-xs">
@@ -303,7 +305,7 @@ export default function ParamControlPanel() {
             </div>
             <SliderRow
               label="Glossiness"
-              value={params.glossiness}
+              value={carbonParams.glossiness}
               min={0}
               max={1}
               step={0.01}
@@ -311,7 +313,7 @@ export default function ParamControlPanel() {
             />
             <SliderRow
               label="Gap Width"
-              value={params.gapWidth}
+              value={carbonParams.gapWidth}
               min={0}
               max={0.3}
               step={0.01}

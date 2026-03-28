@@ -5,7 +5,7 @@ import { usePatternStore } from '@/stores/patternStore';
 import type { PatternEngine } from '@/engine/PatternEngine';
 
 const MAP_NAMES = ['height', 'normal', 'ao', 'roughness', 'diffuse'] as const;
-const PREVIEW_SPHERE_SEGMENTS = 224;
+const PREVIEW_SPHERE_SEGMENTS = 448;
 
 interface SpherePreview3DProps {
   engine: PatternEngine | null;
@@ -91,7 +91,9 @@ export default function SpherePreview3D({ engine, renderVersion }: SpherePreview
       ro.disconnect();
       controls.dispose();
       renderer.dispose();
+      renderer.forceContextLoss();
       geometry.dispose();
+      materialRef.current?.dispose();
       material.dispose();
       for (const tex of Object.values(texturesRef.current)) tex.dispose();
       texturesRef.current = {};
@@ -108,7 +110,7 @@ export default function SpherePreview3D({ engine, renderVersion }: SpherePreview
     if (!mesh) return;
 
     // ── Material type switch (필요 시) ──
-    const isCarbon = params.type === 'carbonPlain' || params.type === 'carbonTwill';
+    const isCarbon = 'glossiness' in params;
     const typeKey = isCarbon ? 'carbon' : 'fabric';
     if (typeKey !== prevTypeRef.current) {
       prevTypeRef.current = typeKey;
@@ -186,7 +188,7 @@ export default function SpherePreview3D({ engine, renderVersion }: SpherePreview
 
     // Carbon glossiness sync
     if (isCarbon && mat instanceof THREE.MeshPhysicalMaterial) {
-      const glossiness = params.glossiness ?? 0.85;
+      const glossiness = 'glossiness' in params ? params.glossiness : 0.85;
       mat.roughness = THREE.MathUtils.lerp(0.38, 0.12, glossiness);
       mat.clearcoat = THREE.MathUtils.lerp(0.75, 1.0, glossiness);
       mat.clearcoatRoughness = THREE.MathUtils.lerp(0.24, 0.03, glossiness);

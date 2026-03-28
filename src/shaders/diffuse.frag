@@ -14,12 +14,24 @@ uniform float u_twistAngle;
 uniform float u_edgeDefinition;
 uniform float u_yarnLoft;
 uniform float u_gapWidth;
+uniform float u_repeatUnit;
 uniform int u_patternType;  // 0-2: fabric, 3-4: carbon
 
 in vec2 v_uv;
 out vec4 fragColor;
 
 const int MAX_FLOAT_SEARCH_STEPS = 24;
+
+float wrapRepeat(float value, float repeat) {
+  return mod(mod(value, repeat) + repeat, repeat);
+}
+
+vec2 wrapRepeat(vec2 value, float repeat) {
+  return vec2(
+    wrapRepeat(value.x, repeat),
+    wrapRepeat(value.y, repeat)
+  );
+}
 
 float sampleWeave(vec2 cellIdx) {
   vec2 uv = (mod(cellIdx, u_matrixSize) + 0.5) / u_matrixSize;
@@ -143,17 +155,17 @@ float carbonFiberTone(float alongPhase, float acrossCoord, float mask, float gap
 }
 
 void main() {
-  float density = max(u_matrixSize.x, round(u_density / u_matrixSize.x) * u_matrixSize.x);
-  vec2 tiledUV = v_uv * density;
+  float density = max(u_repeatUnit, round(u_density / u_repeatUnit) * u_repeatUnit);
+  vec2 tiledUV = fract(v_uv) * density;
   float rawShear = sin(u_twistAngle);
-  float shear = round(rawShear * density / u_matrixSize.x) * u_matrixSize.x / density;
+  float shear = round(rawShear * density / u_repeatUnit) * u_repeatUnit / density;
   float carbonFactor = u_patternType >= 3 ? 1.0 : 0.0;
   float cellScale = weaveCellScale();
 
-  vec2 sh = vec2(
+  vec2 sh = wrapRepeat(vec2(
     tiledUV.x + tiledUV.y * shear,
     tiledUV.y + tiledUV.x * shear
-  );
+  ), density);
   vec2 gridSh = sh / cellScale;
   vec2 cellIdx = floor(gridSh);
   vec2 f = fract(gridSh);
@@ -248,12 +260,13 @@ void main() {
     yarnColor *= mix(0.96, 1.18, strandMix) * mix(0.96, 1.05, centerBand);
   }
 
-  float centerH = texture(u_heightMap, v_uv).r;
-  float ao = texture(u_aoMap, v_uv).r;
-  float hL = texture(u_heightMap, mod(v_uv + vec2(-1.0, 0.0) * u_texelSize, 1.0)).r;
-  float hR = texture(u_heightMap, mod(v_uv + vec2( 1.0, 0.0) * u_texelSize, 1.0)).r;
-  float hU = texture(u_heightMap, mod(v_uv + vec2( 0.0, 1.0) * u_texelSize, 1.0)).r;
-  float hD = texture(u_heightMap, mod(v_uv + vec2( 0.0,-1.0) * u_texelSize, 1.0)).r;
+  vec2 baseUV = fract(v_uv);
+  float centerH = texture(u_heightMap, baseUV).r;
+  float ao = texture(u_aoMap, baseUV).r;
+  float hL = texture(u_heightMap, mod(baseUV + vec2(-1.0, 0.0) * u_texelSize, 1.0)).r;
+  float hR = texture(u_heightMap, mod(baseUV + vec2( 1.0, 0.0) * u_texelSize, 1.0)).r;
+  float hU = texture(u_heightMap, mod(baseUV + vec2( 0.0, 1.0) * u_texelSize, 1.0)).r;
+  float hD = texture(u_heightMap, mod(baseUV + vec2( 0.0,-1.0) * u_texelSize, 1.0)).r;
   vec3 pseudoNormal = normalize(vec3(-(hR - hL) * 5.0, (hU - hD) * 5.0, 1.0));
   vec3 lightDir = normalize(vec3(-0.45, 0.65, 0.62));
   float ndl = dot(pseudoNormal, lightDir) * 0.5 + 0.5;
