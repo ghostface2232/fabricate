@@ -57,7 +57,7 @@ export default function AppLayout({
       {/* ── Header ── */}
       <header className="h-12 shrink-0 flex items-center justify-between px-4 border-b border-zinc-800 bg-zinc-900">
         <img
-          src="/Logo/fabricate_logo_wordmark.png"
+          src={`${import.meta.env.BASE_URL}Logo/fabricate_logo_wordmark.png`}
           alt="Fabricate"
           className="h-5 w-auto select-none"
           draggable={false}
