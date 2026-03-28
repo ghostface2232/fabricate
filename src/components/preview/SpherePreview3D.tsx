@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { usePatternStore } from '@/stores/patternStore';
+import { isCarbonPatternType } from '@/types/pattern';
 import type { PatternEngine } from '@/engine/PatternEngine';
 
 const MAP_NAMES = ['height', 'normal', 'ao', 'roughness', 'diffuse'] as const;
@@ -22,37 +23,33 @@ export default function SpherePreview3D({ engine, renderVersion }: SpherePreview
   const prevRenderSizeRef = useRef(0);
 
   const params = usePatternStore((s) => s.params);
+  const paramsRef = useRef(params);
+  paramsRef.current = params;
 
-  // Three.js 씬 초기화
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
 
-    // Renderer
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
     renderer.setClearColor(0x09090b);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     container.appendChild(renderer.domElement);
 
-    // Camera
     const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100);
     camera.position.set(0, 0, 2.8);
 
-    // Scene
     const scene = new THREE.Scene();
 
-    // Lighting
     const dirLight = new THREE.DirectionalLight(0xffffff, 1.5);
     dirLight.position.set(5, 5, 5);
     scene.add(dirLight);
     scene.add(new THREE.AmbientLight(0xffffff, 0.3));
     scene.add(new THREE.HemisphereLight(0x606080, 0x404040, 0.5));
 
-    // Geometry — uv2 for aoMap
+    // uv2 for aoMap
     const geometry = new THREE.SphereGeometry(1, PREVIEW_SPHERE_SEGMENTS, PREVIEW_SPHERE_SEGMENTS);
     geometry.setAttribute('uv2', geometry.getAttribute('uv'));
 
-    // Material (placeholder, recreated on type change)
     const material = new THREE.MeshStandardMaterial();
     materialRef.current = material;
 
@@ -60,7 +57,6 @@ export default function SpherePreview3D({ engine, renderVersion }: SpherePreview
     scene.add(mesh);
     meshRef.current = mesh;
 
-    // Controls
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.autoRotate = true;
@@ -68,7 +64,6 @@ export default function SpherePreview3D({ engine, renderVersion }: SpherePreview
     controls.minDistance = 1.8;
     controls.maxDistance = 5;
 
-    // Resize
     const ro = new ResizeObserver(([entry]) => {
       const { width, height } = entry.contentRect;
       if (width === 0 || height === 0) return;
@@ -78,7 +73,6 @@ export default function SpherePreview3D({ engine, renderVersion }: SpherePreview
     });
     ro.observe(container);
 
-    // Animation loop
     const animate = () => {
       rafRef.current = requestAnimationFrame(animate);
       controls.update();
@@ -103,15 +97,17 @@ export default function SpherePreview3D({ engine, renderVersion }: SpherePreview
     };
   }, []);
 
-  // Material + Texture 통합 업데이트 (타이밍 불일치 방지)
+  // params를 ref로 참조하여 renderVersion 변경(= 엔진 렌더링 완료) 시에만 실행.
+  // params가 dep에 있으면 엔진 재렌더 전에 stale 텍스처를 읽게 되는 문제 방지.
   useEffect(() => {
     if (!engine || renderVersion === 0) return;
     const mesh = meshRef.current;
     if (!mesh) return;
 
-    // ── Material type switch (필요 시) ──
-    const isCarbon = 'glossiness' in params;
+    const params = paramsRef.current;
+    const isCarbon = isCarbonPatternType(params.type);
     const typeKey = isCarbon ? 'carbon' : 'fabric';
+
     if (typeKey !== prevTypeRef.current) {
       prevTypeRef.current = typeKey;
       materialRef.current?.dispose();
@@ -121,7 +117,7 @@ export default function SpherePreview3D({ engine, renderVersion }: SpherePreview
 
       let mat: THREE.MeshStandardMaterial | THREE.MeshPhysicalMaterial;
       if (isCarbon) {
-        const glossiness = 'glossiness' in params ? params.glossiness : 0.85;
+        const glossiness = params.glossiness;
         mat = new THREE.MeshPhysicalMaterial({
           roughness: THREE.MathUtils.lerp(0.38, 0.12, glossiness),
           clearcoat: THREE.MathUtils.lerp(0.75, 1.0, glossiness),
@@ -140,7 +136,6 @@ export default function SpherePreview3D({ engine, renderVersion }: SpherePreview
     const mat = materialRef.current;
     if (!mat) return;
 
-    // ── Texture update ──
     const renderSize = engine.getRenderSize();
 
     if (renderSize !== prevRenderSizeRef.current) {
@@ -173,7 +168,6 @@ export default function SpherePreview3D({ engine, renderVersion }: SpherePreview
       }
     }
 
-    // Assign to material
     const texs = texturesRef.current;
     mat.map = texs['diffuse'];
     mat.normalMap = texs['normal'];
@@ -186,9 +180,8 @@ export default function SpherePreview3D({ engine, renderVersion }: SpherePreview
     mesh.geometry.computeBoundingSphere();
     mesh.geometry.computeBoundingBox();
 
-    // Carbon glossiness sync
     if (isCarbon && mat instanceof THREE.MeshPhysicalMaterial) {
-      const glossiness = 'glossiness' in params ? params.glossiness : 0.85;
+      const glossiness = params.glossiness;
       mat.roughness = THREE.MathUtils.lerp(0.38, 0.12, glossiness);
       mat.clearcoat = THREE.MathUtils.lerp(0.75, 1.0, glossiness);
       mat.clearcoatRoughness = THREE.MathUtils.lerp(0.24, 0.03, glossiness);
@@ -196,7 +189,8 @@ export default function SpherePreview3D({ engine, renderVersion }: SpherePreview
     }
 
     mat.needsUpdate = true;
-  }, [engine, renderVersion, params]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- params는 ref로 참조; renderVersion이 바뀔 때만 실행해야 엔진 렌더 완료 보장
+  }, [engine, renderVersion]);
 
   return (
     <div ref={containerRef} className="w-full h-full" />
