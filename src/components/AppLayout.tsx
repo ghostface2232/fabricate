@@ -54,9 +54,12 @@ export default function AppLayout({
     <div className="h-screen flex flex-col bg-zinc-950 text-zinc-300 overflow-hidden">
       {/* ── Header ── */}
       <header className="h-12 shrink-0 flex items-center justify-between px-4 border-b border-zinc-800 bg-zinc-900">
-        <span className="font-mono text-sm text-zinc-400 select-none">
-          Fabricate
-        </span>
+        <img
+          src="/Logo/fabricate_logo_wordmark.png"
+          alt="Fabricate"
+          className="h-5 w-auto select-none"
+          draggable={false}
+        />
         <div className="flex items-center gap-2">
           <div className="flex items-center">
             <Button
