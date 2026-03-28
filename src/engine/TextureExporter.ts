@@ -52,7 +52,7 @@ export function pixelsToBlob(
       return;
     }
     const imageData = new ImageData(
-      new Uint8ClampedArray(pixels.buffer, pixels.byteOffset, pixels.byteLength),
+      new Uint8ClampedArray(pixels),
       width,
       height,
     );

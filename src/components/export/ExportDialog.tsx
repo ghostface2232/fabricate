@@ -16,10 +16,10 @@ import { usePatternStore } from '@/stores/patternStore';
 import { exportAllMaps, exportAsZip, makeFilename } from '@/engine/TextureExporter';
 import { saveBlob, saveBlobsToDirectory } from '@/utils/fileAccess';
 import type { PatternEngine } from '@/engine/PatternEngine';
-import type { PBRMapType, NormalDirection } from '@/types/pattern';
+import type { PBRMapType } from '@/types/pattern';
 import { FolderOpen, FileArchive, Loader2, Check } from 'lucide-react';
 
-const ALL_MAPS: PBRMapType[] = ['height', 'normal', 'ao', 'roughness', 'diffuse'];
+const ALL_MAPS: PBRMapType[] = ['diffuse', 'height', 'normal', 'roughness', 'ao'];
 
 const MAP_LABELS: Record<PBRMapType, string> = {
   height: 'Height',
