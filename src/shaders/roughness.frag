@@ -152,6 +152,10 @@ float floatLoftFromInfo(
   return 1.0 - edgeDip * endMask + centerLift * (1.0 - endMask);
 }
 
+float longFloatContinuity(float span, float carbonFactor) {
+  return smoothstep(1.0, mix(2.2, 1.6, carbonFactor), span);
+}
+
 float carbonLine(float alongCoord, float freq, float halfWidth, float offset) {
   float x = alongCoord * freq + offset;
   float d = abs(fract(x) - 0.5);
@@ -225,14 +229,18 @@ void main() {
 
   vec3 warpInfo = floatSpanInfo(cellIdx, f.y, vec2(0.0, 1.0), 1.0, cellScale);
   vec3 weftInfo = floatSpanInfo(cellIdx, f.x, vec2(1.0, 0.0), 0.0, cellScale);
+  float warpContinuity = longFloatContinuity(warpInfo.y, carbonFactor);
+  float weftContinuity = longFloatContinuity(weftInfo.y, carbonFactor);
   float warpSpanFactor = warpInfo.z;
   float weftSpanFactor = weftInfo.z;
   float warpLongTop = floatLoftFromInfo(warpInfo, effectiveLoft, effectiveEdge, carbonFactor);
   float weftLongTop = floatLoftFromInfo(weftInfo, effectiveLoft, effectiveEdge, carbonFactor);
   float warpLongUnder = mix(1.0, warpLongTop, 0.18);
   float weftLongUnder = mix(1.0, weftLongTop, 0.18);
-  float warpVisibleShape = mix(warpCross * warpLongUnder, warpCross * warpLongTop, overFactor);
-  float weftVisibleShape = mix(weftCross * weftLongTop, weftCross * weftLongUnder, overFactor);
+  float warpOppositionFade = 1.0 - 0.92 * warpContinuity;
+  float weftOppositionFade = 1.0 - 0.92 * weftContinuity;
+  float warpVisibleShape = mix(warpCross * warpLongUnder * weftOppositionFade, warpCross * warpLongTop, overFactor);
+  float weftVisibleShape = mix(weftCross * weftLongTop, weftCross * weftLongUnder * warpOppositionFade, overFactor);
 
   float warpVis = warpVisibleShape * mix(0.35, 1.0, overFactor);
   float weftVis = weftVisibleShape * mix(1.0, 0.35, overFactor);

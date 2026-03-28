@@ -147,15 +147,15 @@ float floatLoftFromInfo(
   return 1.0 - edgeDip * endMask + centerLift * (1.0 - endMask);
 }
 
+float longFloatContinuity(float span, float carbonFactor) {
+  return smoothstep(1.0, mix(2.2, 1.6, carbonFactor), span);
+}
+
 float underImprintFactor(vec3 info, float carbonFactor) {
   float span = info.y;
-  float spanFactor = info.z;
-  float baseImprint = mix(1.0, mix(0.08, 0.02, carbonFactor), spanFactor);
-  float longFloatFade = 1.0 - mix(
-    smoothstep(2.0, 3.0, span),
-    smoothstep(1.0, 2.0, span),
-    carbonFactor
-  );
+  float continuity = longFloatContinuity(span, carbonFactor);
+  float baseImprint = mix(1.0, mix(0.018, 0.008, carbonFactor), continuity);
+  float longFloatFade = pow(1.0 - continuity, 1.35);
   return baseImprint * longFloatFade;
 }
 
@@ -295,12 +295,16 @@ void main() {
 
   vec3 warpInfo = floatSpanInfo(cellIdx, f.y, vec2(0.0, 1.0), 1.0, cellScale);
   vec3 weftInfo = floatSpanInfo(cellIdx, f.x, vec2(1.0, 0.0), 0.0, cellScale);
+  float warpContinuity = longFloatContinuity(warpInfo.y, carbonFactor);
+  float weftContinuity = longFloatContinuity(weftInfo.y, carbonFactor);
   float warpSpanFactor = warpInfo.z;
   float weftSpanFactor = weftInfo.z;
   float warpLongTop = floatLoftFromInfo(warpInfo, effectiveLoft, effectiveEdge, carbonFactor);
   float weftLongTop = floatLoftFromInfo(weftInfo, effectiveLoft, effectiveEdge, carbonFactor);
   float warpLongUnder = mix(1.0, warpLongTop, 0.18);
   float weftLongUnder = mix(1.0, weftLongTop, 0.18);
+  float warpOppositionFade = 1.0 - mix(0.92, 0.96, carbonFactor) * warpContinuity;
+  float weftOppositionFade = 1.0 - mix(0.92, 0.96, carbonFactor) * weftContinuity;
 
   float warpTopShape = warpCross * warpLongTop;
   float weftTopShape = weftCross * weftLongTop;
@@ -313,12 +317,8 @@ void main() {
   }
 
   float crossing = saturate(warpCross * weftCross);
-  float topSpan = mix(weftInfo.y, warpInfo.y, overFactor);
-  float topFloatSuppression = mix(
-    1.0,
-    1.0 - 0.92 * smoothstep(1.0, 2.0, topSpan),
-    carbonFactor
-  );
+  float topContinuity = mix(weftContinuity, warpContinuity, overFactor);
+  float topFloatSuppression = 1.0 - mix(0.72, 0.92, carbonFactor) * topContinuity;
   float crossingInfluence = crossing * topFloatSuppression;
 
   float topLevel = mix(
@@ -340,9 +340,9 @@ void main() {
   float warpUnderImprint = underImprintFactor(warpInfo, carbonFactor);
   float weftUnderImprint = underImprintFactor(weftInfo, carbonFactor);
   float hWarpOver = topLevel * warpTopShape * overCompression
-    + bottomLevel * weftUnderShape * underCompression * warpReveal * warpUnderImprint;
+    + bottomLevel * weftUnderShape * underCompression * warpReveal * warpUnderImprint * warpOppositionFade;
   float hWeftOver = topLevel * weftTopShape * overCompression
-    + bottomLevel * warpUnderShape * underCompression * weftReveal * weftUnderImprint;
+    + bottomLevel * warpUnderShape * underCompression * weftReveal * weftUnderImprint * weftOppositionFade;
   float h = mix(hWeftOver, hWarpOver, overFactor);
 
   float topSpanFactor = mix(weftSpanFactor, warpSpanFactor, overFactor);
@@ -352,8 +352,8 @@ void main() {
     h = mix(h, smoothstep(0.0, 1.0, h), 0.18);
   }
 
-  float warpVisibleShape = mix(warpUnderShape, warpTopShape, overFactor);
-  float weftVisibleShape = mix(weftTopShape, weftUnderShape, overFactor);
+  float warpVisibleShape = mix(warpUnderShape * weftOppositionFade, warpTopShape, overFactor);
+  float weftVisibleShape = mix(weftTopShape, weftUnderShape * warpOppositionFade, overFactor);
   float warpMask = pow(saturate(warpVisibleShape), 0.85) * mix(0.32, 1.0, overFactor);
   float weftMask = pow(saturate(weftVisibleShape), 0.85) * mix(1.0, 0.32, overFactor);
   float warpFiber = fiberDetail(warpPhase, warpMask, carbonFactor);
