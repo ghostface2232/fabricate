@@ -301,11 +301,11 @@ function hasChanges(
 // ─── Store 생성 ──────────────────────────────────────────────
 
 export const usePatternStore = create<PatternStore>((set, get) => ({
-  // 초기 상태: 3/1 능직(데님/드릴 계열)
-  params: getDefaultParams('twillWeave31'),
+  // 초기 상태: plain weave
+  params: getDefaultParams('plainWeave'),
   pbrSettings: { ...DEFAULT_PBR_SETTINGS },
   exportSettings: { ...DEFAULT_EXPORT_SETTINGS },
-  previewResolution: 512,
+  previewResolution: 1024,
 
   setPatternType: (type) => {
     set({ params: getDefaultParams(type) });

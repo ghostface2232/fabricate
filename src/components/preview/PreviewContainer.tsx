@@ -114,7 +114,7 @@ export default function PreviewContainer({ engine, renderVersion, lastColorOnly 
           <button
             onClick={() => setTiling(!tiling)}
             className={cn(
-              'h-7 w-7 flex items-center justify-center rounded-md border transition-colors',
+              'h-7 px-2 flex items-center justify-center gap-1.5 rounded-md border transition-colors text-xs font-medium',
               tiling
                 ? 'border-zinc-600 bg-zinc-700 text-zinc-200'
                 : 'border-zinc-800 text-zinc-600 hover:text-zinc-400',
@@ -122,6 +122,7 @@ export default function PreviewContainer({ engine, renderVersion, lastColorOnly 
             title="Tile 3x3"
           >
             <Grid2x2 className="w-3.5 h-3.5" />
+            <span>Tile</span>
           </button>
         )}
 
